@@ -210,67 +210,54 @@ function processLap(exactTime, useFreeze) {
 
 // iPhone (iOS/Bluefy) 確実保存対応版 GPX出力
 function exportGPX() {
-    if (trackLogs.length === 0 && currentLapLog.length === 0) {
+    // 1. データがあるか確認
+    if (trackLogs.length === 0 && (typeof currentLapLog !== 'undefined' && currentLapLog.length === 0)) {
         alert("保存するログがありません");
         return;
     }
-    
-    const all = [...trackLogs];
-    if (currentLapLog.length > 0) all.push(currentLapLog);
 
-    // GPXヘッダー（解析側が読み取りやすい標準的な構成）
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
-<metadata><time>${new Date().toISOString()}</time></metadata>`;
+    // 2. 文字列結合を高速化するために配列を使用
+    const chunks = [];
+    chunks.push('<?xml version="1.0" encoding="UTF-8"?>');
+    chunks.push('<gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">');
+    chunks.push(`<metadata><time>${new Date().toISOString()}</time></metadata>`);
+
+    const all = [...trackLogs];
+    if (typeof currentLapLog !== 'undefined' && currentLapLog.length > 0) all.push(currentLapLog);
 
     all.forEach((lap, i) => {
-        gpx += `\n<trk><name>Lap ${i+1}</name><trkseg>`;
+        if (lap.length === 0) return;
+        chunks.push(`\n<trk><name>Lap ${i+1}</name><trkseg>`);
         lap.forEach(p => {
-            gpx += `\n  <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">
-    <time>${new Date(p.time).toISOString()}</time>
-    <extensions>
-      <speed>${(p.speed / 3.6).toFixed(4)}</speed>
-      <gpxtpx:TrackPointExtension>
-        <gpxtpx:hr>${Math.round(p.rpm)}</gpxtpx:hr>
-      </gpxtpx:TrackPointExtension>
-    </extensions>
-  </trkpt>`;
+            chunks.push(`\n  <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">`);
+            chunks.push(`<time>${new Date(p.time).toISOString()}</time>`);
+            chunks.push(`<extensions>`);
+            chunks.push(`<speed>${(p.speed / 3.6).toFixed(4)}</speed>`); // 速度はm/sに変換
+            chunks.push(`<gpxtpx:TrackPointExtension>`);
+            chunks.push(`<gpxtpx:hr>${Math.round(p.rpm)}</gpxtpx:hr>`);
+            if(p.temp) chunks.push(`<gpxtpx:atemp>${p.temp}</gpxtpx:atemp>`);
+            chunks.push(`</gpxtpx:TrackPointExtension>`);
+            chunks.push(`</extensions>`);
+            chunks.push(`</trkpt>`);
         });
-        gpx += `\n</trkseg></trk>`;
+        chunks.push(`\n</trkseg></trk>`);
     });
-    gpx += `\n</gpx>`;
+    chunks.push(`\n</gpx>`);
 
-    // --- 保存処理の修正 ---
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const url = window.URL.createObjectURL(blob);
-    const fileName = `RaceLog_${Date.now()}.gpx`;
-
-    // 古いパネルがあれば削除
-    const oldPanel = document.getElementById('save-confirm-panel');
-    if (oldPanel) oldPanel.remove();
-
-    // 画面中央に大きな「保存確定ボタン」を生成
-    const panel = document.createElement('div');
-    panel.id = 'save-confirm-panel';
-    panel.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;";
+    // 3. Blobの生成
+    const blob = new Blob([chunks.join('')], { type: 'application/gpx+xml' });
     
-    panel.innerHTML = `
-        <div style="background:#222; border:2px solid #E4002B; border-radius:15px; padding:30px; text-align:center; width:100%; max-width:300px; box-shadow: 0 0 20px rgba(228,0,43,0.5);">
-            <p style="color:white; font-family:sans-serif; font-weight:bold; margin-bottom:20px;">ログの準備ができました</p>
-            <a href="${url}" download="${fileName}" id="final-save-link" style="display:block; background:#E4002B; color:white; padding:18px; text-decoration:none; border-radius:10px; font-weight:bold; margin-bottom:20px; font-size:18px;">💾 ファイルを保存</a>
-            <button onclick="document.getElementById('save-confirm-panel').remove()" style="background:transparent; color:#888; border:none; font-size:14px; text-decoration:underline;">キャンセル</button>
-        </div>
-    `;
+    // 4. 【最重要】ここが移植のポイント：iOSの制限に引っかからない直列処理
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = `RaceLog_${Date.now()}.gpx`;
+    
+    // a.style.display = 'none'; // これもあえて書かない、または消す
+    a.click(); // ここでiPhoneが「ユーザーの操作」として認識し、保存が発動する
 
-    document.body.appendChild(panel);
-
-    // ユーザーが「ファイルを保存」ボタンを押すと、iOS標準の保存・共有メニューが開きます
-    document.getElementById('final-save-link').onclick = () => {
-        setTimeout(() => {
-            document.getElementById('save-confirm-panel').remove();
-            window.URL.revokeObjectURL(url);
-        }, 500);
-    };
+    // 5. 後片付け（少し時間を置いてからメモリを解放）
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function timeFormat(ms) {
     let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
@@ -339,4 +326,5 @@ window.onload = () => {
 </body>
 
 </html>
+
 
