@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>KLAP DEGI ULTIMATE V2</title>
     <style>
         :root { 
@@ -208,8 +209,13 @@ function processLap(exactTime, useFreeze) {
 }
 
 // ANALYZER 完全対応版 GPX出力
+// iPhone (iOS) 対応版 GPX出力
 function exportGPX() {
-    if (trackLogs.length === 0 && currentLapLog.length === 0) return;
+    if (trackLogs.length === 0 && currentLapLog.length === 0) {
+        alert("保存するログがありません");
+        return;
+    }
+    
     const all = [...trackLogs];
     if (currentLapLog.length > 0) all.push(currentLapLog);
 
@@ -220,7 +226,6 @@ function exportGPX() {
     all.forEach((lap, i) => {
         gpx += `\n<trk><name>Lap ${i+1}</name><trkseg>`;
         lap.forEach(p => {
-            // Analyzerが認識できる <speed> と <gpxtpx:hr> を正確に出力
             gpx += `\n  <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">
     <time>${new Date(p.time).toISOString()}</time>
     <extensions>
@@ -235,11 +240,40 @@ function exportGPX() {
     });
     gpx += `\n</gpx>`;
 
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `RaceLog_${Date.now()}.gpx`;
-    a.click();
+    // --- iPhone/iOS用ダウンロード処理の強化 ---
+    try {
+        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+        const fileName = `RaceLog_${Date.now()}.gpx`;
+
+        // iOSのブラウザでは a.click() だけでは失敗することが多いため、
+        // URLを生成して明示的に管理します
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+        
+        // DOMに追加しないとiOSで発火しない場合がある
+        document.body.appendChild(a);
+        
+        // 短いディレイを挟むことでiOSのイベントループを確実に回す
+        setTimeout(() => {
+            a.click();
+            // 実行後にクリーンアップ
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }, 100);
+        }, 0);
+
+        // ユーザーに実行を知らせる（iOSでは無反応に見えることがあるため）
+        alert("ログを生成しました。「ファイル」アプリ等へ保存してください。");
+
+    } catch (e) {
+        console.error(e);
+        alert("保存エラー: " + e.message);
+    }
 }
 
 function timeFormat(ms) {
@@ -307,4 +341,5 @@ window.onload = () => {
 };
 </script>
 </body>
+
 </html>
