@@ -2,7 +2,7 @@ const CACHE_NAME = 'KLAP DEGI GPS';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/g_gps.html',
+  '/klap-degi-ip10.html',
   '/manifest.json',
   '/service-worker.js',
   '/192.png',
@@ -54,5 +54,6 @@ self.addEventListener('activate', (event) => {
   );
 
 });
+
 
 
