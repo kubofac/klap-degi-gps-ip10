@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI - NMEA TYPE</title>
+    <title>KLAP DEGI - DEBUG MODE</title>
     <style>
         :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; }
         #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; }
         #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
+        
+        /* デバッグモニターのスタイル */
+        #debug-monitor { 
+            position: absolute; top: 10px; left: 10px; width: 280px; 
+            background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 5px;
+            padding: 8px; font-family: monospace; font-size: 11px; color: #0f0; z-index: 1000; pointer-events: none;
+        }
+        .debug-val { color: #fff; font-weight: bold; }
+
         .main-ui-container { position: absolute; right: 10px; top: 100px; bottom: 70px; display: flex; align-items: flex-start; gap: 40px; z-index: 20; pointer-events: none; }
         #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; }
         #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 12px #000; }
@@ -33,6 +42,16 @@
 <body>
 
 <div id="dashboard">
+    <div id="debug-monitor">
+        [BLE DEBUG]<br>
+        STATUS: <span id="dbg-status" class="debug-val">DISCONNECTED</span><br>
+        RAW: <span id="dbg-raw" style="font-size: 9px; color: #aaa;">WAITING...</span><br>
+        RPM(Hz): <span id="dbg-rpm" class="debug-val">0</span><br>
+        TEMP: <span id="dbg-temp" class="debug-val">--</span><br>
+        GPS STATUS: <span id="dbg-gps" class="debug-val">SEARCHING</span><br>
+        SPEED: <span id="dbg-speed" class="debug-val">0</span> km/h
+    </div>
+
     <canvas id="canvas"></canvas>
     <div class="main-ui-container">
         <div id="info-overlay">
@@ -65,88 +84,79 @@ let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, sessionM
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], lastLapTime = 0;
 let trackLogs = [], currentLapLog = [], lastPos = null, lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0, previousSideOfLine = null;
-let gpsFixed = false; // GPS測位フラグを追加
+let gpsFixed = false;
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
 async function startBle() {
+    document.getElementById('dbg-status').textContent = "CONNECTING...";
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         await char.startNotifications();
+        document.getElementById('dbg-status').textContent = "CONNECTED";
         const decoder = new TextDecoder();
         char.oncharacteristicvaluechanged = (e) => {
             lastBleDataTime = Date.now();
-            parseNmea(decoder.decode(e.target.value));
+            const str = decoder.decode(e.target.value);
+            document.getElementById('dbg-raw').textContent = str.substring(0, 40); // 生データの冒頭を表示
+            parseNmea(str);
         };
-    } catch (e) { alert("BLE Error: " + e); }
+    } catch (e) { 
+        document.getElementById('dbg-status').textContent = "ERROR";
+        alert("BLE Error: " + e); 
+    }
 }
 
 function parseNmea(str) {
     const lines = str.split('\n');
     lines.forEach(line => {
+        // 独自パケット $PKFAC,hz,temp
         if (line.startsWith('$PKFAC')) {
             const parts = line.split(',');
             if (parts.length >= 3) {
                 let hz = parseInt(parts[1]);
+                document.getElementById('dbg-rpm').textContent = hz;
                 currentRPM = (hz * 60) / (parseInt(localStorage.getItem('pl1')) || 1);
                 currentTemp = parseInt(parts[2]);
                 document.getElementById('temp_val').textContent = currentTemp;
+                document.getElementById('dbg-temp').textContent = currentTemp + "°C";
             }
-        } else if (line.includes('RMC')) {
+        } 
+        // GPSデータ RMC (位置・速度)
+        else if (line.includes('RMC')) {
             const p = line.split(',');
+            // p[2]が'A'なら測位成功、'V'なら未測位
+            const status = p[2];
+            document.getElementById('dbg-gps').textContent = (status === 'A') ? "FIXED(A)" : "SEARCHING(V)";
+            
             const lat = parseDeg(p[3], p[4]);
             const lon = parseDeg(p[5], p[6]);
             if (p[7]) currentSpeedKmh = Math.round(parseFloat(p[7]) * 1.852);
-            
-            // 緯度経度が取得できていればフラグを立てる
+            document.getElementById('dbg-speed').textContent = currentSpeedKmh;
+
             if (lat !== 0 && lon !== 0) {
                 gpsFixed = true; 
                 updateGps(lat, lon);
             } else {
                 gpsFixed = false;
             }
-        } else if (line.includes('VTG')) {
+        }
+        // GPSデータ VTG (地上速度)
+        else if (line.includes('VTG')) {
             const p = line.split(',');
             const skm = parseFloat(p[7]);
             if (!isNaN(skm)) {
                 currentSpeedKmh = Math.round(skm);
                 document.getElementById('speed_val').textContent = currentSpeedKmh;
+                document.getElementById('dbg-speed').textContent = currentSpeedKmh;
             }
         }
     });
 }
 
-// ボタンの状態監視を更新
-setInterval(() => {
-    const bBtn = document.getElementById('btConnect'), rBtn = document.getElementById('reloadBtn');
-    const now = Date.now();
-    const isCommunicating = (now - lastBleDataTime < 2000);
-
-    if (isCommunicating && gpsFixed) {
-        // 通信OK かつ GPS測位済み
-        bBtn.classList.add('active-btn');
-        bBtn.textContent = "GPS FIXED";
-        bBtn.style.backgroundColor = ""; // CSSの赤を適用
-    } else if (isCommunicating && !gpsFixed) {
-        // 通信OK だが GPS未測位
-        bBtn.classList.remove('active-btn');
-        bBtn.textContent = "WAIT GPS...";
-        bBtn.style.backgroundColor = "var(--hrc-blue)"; // 測位待ちは青色
-    } else {
-        // 通信途絶
-        bBtn.classList.remove('active-btn');
-        bBtn.textContent = "BLE START";
-        bBtn.style.backgroundColor = ""; 
-    }
-
-    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('pl1');
-    rBtn.style.backgroundColor = hasConfig ? "#1a1a1a" : "var(--hrc-orange)";
-}, 1000);
-
-// --- 以下の関数群は変更なしですが構造維持のため省略せず含めます ---
 function parseDeg(val, dir) {
     if (!val || val.length < 4) return 0;
     let d, m;
@@ -199,7 +209,7 @@ function processLap(exactTime, useFreeze) {
 
 function exportGPX() {
     const all = [...trackLogs]; if (currentLapLog.length > 0) all.push([...currentLapLog]);
-    const flat = all.flat(); if (flat.length === 0) { alert("データがありません"); return; }
+    const flat = all.flat(); if (flat.length === 0) { alert("データがありません。GPS FIXを確認してください。"); return; }
     let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP"><trk><trkseg>';
     flat.forEach(p => { gpx += `<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.time).toISOString()}</time><extensions><speed>${(p.speed/3.6).toFixed(2)}</speed></extensions></trkpt>`; });
     gpx += '</trkseg></trk></gpx>';
@@ -229,6 +239,30 @@ function tick() {
     }
     requestAnimationFrame(tick);
 }
+
+setInterval(() => {
+    const bBtn = document.getElementById('btConnect'), rBtn = document.getElementById('reloadBtn');
+    const now = Date.now();
+    const isCommunicating = (now - lastBleDataTime < 2000);
+
+    if (isCommunicating && gpsFixed) {
+        bBtn.classList.add('active-btn');
+        bBtn.textContent = "GPS FIXED";
+        bBtn.style.backgroundColor = ""; 
+    } else if (isCommunicating && !gpsFixed) {
+        bBtn.classList.remove('active-btn');
+        bBtn.textContent = "WAIT GPS...";
+        bBtn.style.backgroundColor = "var(--hrc-blue)"; 
+    } else {
+        bBtn.classList.remove('active-btn');
+        bBtn.textContent = "BLE START";
+        bBtn.style.backgroundColor = ""; 
+        document.getElementById('dbg-status').textContent = "DISCONNECTED";
+    }
+
+    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('pl1');
+    rBtn.style.backgroundColor = hasConfig ? "#1a1a1a" : "var(--hrc-orange)";
+}, 1000);
 
 document.getElementById('btConnect').onclick = startBle;
 document.getElementById('saveLogBtn').onclick = exportGPX;
@@ -270,4 +304,3 @@ window.onload = () => {
 </script>
 </body>
 </html>
-
