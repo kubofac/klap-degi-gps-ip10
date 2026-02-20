@@ -95,25 +95,30 @@ async function startBle() {
         document.getElementById('dbg-status').textContent = "CONNECTED";
         
         const decoder = new TextDecoder();
-        char.oncharacteristicvaluechanged = (e) => {
+       char.oncharacteristicvaluechanged = (e) => {
             lastBleDataTime = Date.now();
-            const chunk = decoder.decode(e.target.value);
-            
-            // ★重要：届いた破片をバッファに足す
-            bleBuffer += chunk;
+            const d = e.target.value; // DataViewオブジェクトとして取得
 
-            // ★重要：改行が含まれている場合のみ、1行として処理する
-            if (bleBuffer.includes('\n')) {
-                const lines = bleBuffer.split('\n');
-                // 最後の要素（未完成の行）をバッファに残し、それ以外を処理
-                bleBuffer = lines.pop(); 
-                
-                lines.forEach(line => {
-                    if (line.trim().length > 0) {
-                        document.getElementById('dbg-raw').textContent = line.substring(0, 40);
-                        parseNmea(line);
-                    }
-                });
+            // ★重要：ESP32から届く3バイトのバイナリを解析
+            if (d.byteLength >= 3) {
+                // 1. 回転数 (Hz) の復元（下位バイト | 上位バイト << 8）
+                const hz = d.getUint8(0) | (d.getUint8(1) << 8);
+                // 2. 温度の取得
+                const temp = d.getUint8(2);
+
+                // --- 画面表示の更新 ---
+                // デバッグ用
+                document.getElementById('dbg-rpm').textContent = hz;
+                document.getElementById('dbg-temp').textContent = temp + "°C";
+                document.getElementById('dbg-raw').textContent = `BIN: Hz=${hz} T=${temp}`;
+
+                // メイン表示用
+                const pl1 = parseInt(localStorage.getItem('pl1')) || 1;
+                currentRPM = (hz * 60) / pl1;
+                currentTemp = temp;
+
+                document.getElementById('temp_val').textContent = currentTemp;
+                // rpm_val は下の render() 内の drawTacho で更新されるためここでの代入は不要
             }
         };
     } catch (e) { 
@@ -314,3 +319,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
