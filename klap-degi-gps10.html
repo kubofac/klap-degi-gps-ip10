@@ -105,34 +105,46 @@ async function startBle() {
             lastBleDataTime = Date.now();
             const d = e.target.value;
 
-            // 想定パケット: [0-1]RPM, [2]Temp, [3-6]Lat*10^7, [7-10]Lon*10^7, [11]Speed
-            if (d.byteLength >= 3) {
-                let hz = d.getUint8(0) | (d.getUint8(1) << 8);
+            // 受信データの長さに関わらず、RPMとTempは最低限取得
+            if (d.byteLength >= 2) {
+                let hz = d.getUint16(0, true); // Little Endianで2バイト読み取り
                 currentRPM = (hz * 60) / (parseInt(localStorage.getItem('pl1')) || 1);
+            }
+            if (d.byteLength >= 3) {
                 currentTemp = d.getUint8(2);
                 document.getElementById('temp_val').textContent = currentTemp;
+            }
 
-                if (d.byteLength >= 12) {
-                    const lat = d.getInt32(3, true) / 10000000;
-                    const lon = d.getInt32(7, true) / 10000000;
-                    currentSpeedKmh = d.getUint8(11);
-                    document.getElementById('speed_val').textContent = currentSpeedKmh;
-
-                    if (lat !== 0 && lon !== 0) {
-                        const cur = { lat, lon, time: Date.now(), rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
-                        
-                        if (swState === 1) {
-                            currentLapLog.push(cur);
-                            if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
-                            if (maxSpeed > sessionMaxSpeed) sessionMaxSpeed = maxSpeed;
-                            checkLap(cur);
-                        }
-                        lastPos = cur;
+            // GPSデータのパース (緯度経度がある場合)
+            if (d.byteLength >= 11) {
+                // 3バイト目からInt32(4byte) × 2個を読み取る
+                const latRaw = d.getInt32(3, true);
+                const lonRaw = d.getInt32(7, true);
+                
+                // 10^7で割る前の値が0でないか確認
+                if (latRaw !== 0 && lonRaw !== 0) {
+                    const lat = latRaw / 10000000;
+                    const lon = lonRaw / 10000000;
+                    
+                    // 速度 (11バイト目にあると想定)
+                    if (d.byteLength >= 12) {
+                        currentSpeedKmh = d.getUint8(11);
+                        document.getElementById('speed_val').textContent = currentSpeedKmh;
                     }
+
+                    const cur = { lat, lon, time: Date.now(), rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
+                    
+                    if (swState === 1) {
+                        currentLapLog.push(cur);
+                        if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
+                        if (maxSpeed > sessionMaxSpeed) sessionMaxSpeed = maxSpeed;
+                        checkLap(cur);
+                    }
+                    lastPos = cur;
                 }
             }
         };
-    } catch (e) { console.error("BLE Error:", e); }
+    } catch (e) { alert("BLE接続エラー: " + e); }
 }
 
 // 通過判定 (ライン跨ぎ)
@@ -304,3 +316,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
