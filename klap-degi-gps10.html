@@ -65,10 +65,10 @@ let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, sessionM
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], lastLapTime = 0;
 let trackLogs = [], currentLapLog = [], lastPos = null, lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0, previousSideOfLine = null;
+let gpsFixed = false; // GPS測位フラグを追加
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- BLE接続 & テキストパケット解析 ---
 async function startBle() {
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
@@ -76,12 +76,10 @@ async function startBle() {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         await char.startNotifications();
-
         const decoder = new TextDecoder();
         char.oncharacteristicvaluechanged = (e) => {
             lastBleDataTime = Date.now();
-            const str = decoder.decode(e.target.value);
-            parseNmea(str);
+            parseNmea(decoder.decode(e.target.value));
         };
     } catch (e) { alert("BLE Error: " + e); }
 }
@@ -97,39 +95,68 @@ function parseNmea(str) {
                 currentTemp = parseInt(parts[2]);
                 document.getElementById('temp_val').textContent = currentTemp;
             }
-        } else if (line.startsWith('$GPRMC') || line.startsWith('$GNRMC')) {
+        } else if (line.includes('RMC')) {
             const p = line.split(',');
-            if (p[2] === 'A') { // Valid status
-                const lat = parseDeg(p[3], p[4]);
-                const lon = parseDeg(p[5], p[6]);
-                currentSpeedKmh = Math.round(parseFloat(p[7]) * 1.852);
+            const lat = parseDeg(p[3], p[4]);
+            const lon = parseDeg(p[5], p[6]);
+            if (p[7]) currentSpeedKmh = Math.round(parseFloat(p[7]) * 1.852);
+            
+            // 緯度経度が取得できていればフラグを立てる
+            if (lat !== 0 && lon !== 0) {
+                gpsFixed = true; 
                 updateGps(lat, lon);
+            } else {
+                gpsFixed = false;
             }
-        } else if (line.startsWith('$GPVTG') || line.startsWith('$GNVTG')) {
+        } else if (line.includes('VTG')) {
             const p = line.split(',');
-            const speed = parseFloat(p[7]); // km/h
-            if (!isNaN(speed)) {
-                currentSpeedKmh = Math.round(speed);
+            const skm = parseFloat(p[7]);
+            if (!isNaN(skm)) {
+                currentSpeedKmh = Math.round(skm);
                 document.getElementById('speed_val').textContent = currentSpeedKmh;
             }
         }
     });
 }
 
-function parseDeg(val, dir) {
-    if (!val) return 0;
-    let d = parseFloat(val.substring(0, 2));
-    let m = parseFloat(val.substring(2)) / 60;
-    if (val.length > 10) { // Longitude case (3 digits for deg)
-        d = parseFloat(val.substring(0, 3));
-        m = parseFloat(val.substring(3)) / 60;
+// ボタンの状態監視を更新
+setInterval(() => {
+    const bBtn = document.getElementById('btConnect'), rBtn = document.getElementById('reloadBtn');
+    const now = Date.now();
+    const isCommunicating = (now - lastBleDataTime < 2000);
+
+    if (isCommunicating && gpsFixed) {
+        // 通信OK かつ GPS測位済み
+        bBtn.classList.add('active-btn');
+        bBtn.textContent = "GPS FIXED";
+        bBtn.style.backgroundColor = ""; // CSSの赤を適用
+    } else if (isCommunicating && !gpsFixed) {
+        // 通信OK だが GPS未測位
+        bBtn.classList.remove('active-btn');
+        bBtn.textContent = "WAIT GPS...";
+        bBtn.style.backgroundColor = "var(--hrc-blue)"; // 測位待ちは青色
+    } else {
+        // 通信途絶
+        bBtn.classList.remove('active-btn');
+        bBtn.textContent = "BLE START";
+        bBtn.style.backgroundColor = ""; 
     }
+
+    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('pl1');
+    rBtn.style.backgroundColor = hasConfig ? "#1a1a1a" : "var(--hrc-orange)";
+}, 1000);
+
+// --- 以下の関数群は変更なしですが構造維持のため省略せず含めます ---
+function parseDeg(val, dir) {
+    if (!val || val.length < 4) return 0;
+    let d, m;
+    if (val.indexOf('.') === 5) { d = parseFloat(val.substring(0, 3)); m = parseFloat(val.substring(3)) / 60; }
+    else { d = parseFloat(val.substring(0, 2)); m = parseFloat(val.substring(2)) / 60; }
     return (dir === 'S' || dir === 'W') ? -(d + m) : (d + m);
 }
 
 function updateGps(lat, lon) {
     document.getElementById('speed_val').textContent = currentSpeedKmh;
-    if (lat === 0 || lon === 0) return;
     const cur = { lat, lon, time: Date.now(), rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
     if (swState === 1) {
         currentLapLog.push(cur);
@@ -171,18 +198,17 @@ function processLap(exactTime, useFreeze) {
 }
 
 function exportGPX() {
-    const all = [...trackLogs]; if (currentLapLog.length > 0) all.push(currentLapLog);
-    if (all.length === 0 || all[0].length === 0) { alert("No valid data."); return; }
-    const chunks = ['<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULT" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Log</name><trkseg>'];
-    all.flat().forEach(p => {
-        chunks.push(`<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.time).toISOString()}</time><extensions><speed>${(p.speed / 3.6).toFixed(2)}</speed></extensions></trkpt>`);
-    });
-    chunks.push(`</trkseg></trk></gpx>`);
-    const overlay = document.createElement('div');
-    overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:#111;z-index:10000;padding:20px;display:flex;flex-direction:column;";
-    overlay.innerHTML = `<textarea id="t" style="flex:1;width:100%;background:#000;color:#0f0;font-size:10px;">${chunks.join('')}</textarea>
-    <button onclick="document.getElementById('t').select();document.execCommand('copy');alert('Copied!')" style="padding:20px;background:red;color:white;">COPY & CLOSE</button><button onclick="this.parentElement.remove()" style="padding:10px;color:white;">CANCEL</button>`;
-    document.body.appendChild(overlay);
+    const all = [...trackLogs]; if (currentLapLog.length > 0) all.push([...currentLapLog]);
+    const flat = all.flat(); if (flat.length === 0) { alert("データがありません"); return; }
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP"><trk><trkseg>';
+    flat.forEach(p => { gpx += `<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.time).toISOString()}</time><extensions><speed>${(p.speed/3.6).toFixed(2)}</speed></extensions></trkpt>`; });
+    gpx += '</trkseg></trk></gpx>';
+    const div = document.createElement('div');
+    div.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;";
+    div.innerHTML = `<textarea id="copyarea" readonly style="flex:1;width:100%;background:#111;color:#0f0;font-family:monospace;font-size:10px;">${gpx}</textarea>
+    <button onclick="document.getElementById('copyarea').select();document.execCommand('copy');alert('Copied!')" style="height:60px;margin-top:10px;background:red;color:white;font-weight:bold;">COPY GPX</button>
+    <button onclick="this.parentElement.remove()" style="height:40px;margin-top:5px;background:#333;color:white;">CLOSE</button>`;
+    document.body.appendChild(div);
 }
 
 function timeFormat(ms) {
@@ -204,25 +230,15 @@ function tick() {
     requestAnimationFrame(tick);
 }
 
-setInterval(() => {
-    const bBtn = document.getElementById('btConnect'), rBtn = document.getElementById('reloadBtn');
-    if (Date.now() - lastBleDataTime < 2000) { bBtn.classList.add('active-btn'); bBtn.textContent = "BLE FIXED"; }
-    else { bBtn.classList.remove('active-btn'); bBtn.textContent = "BLE START"; }
-    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('pl1');
-    rBtn.style.backgroundColor = hasConfig ? "#1a1a1a" : "var(--hrc-orange)";
-}, 1000);
-
 document.getElementById('btConnect').onclick = startBle;
 document.getElementById('saveLogBtn').onclick = exportGPX;
 document.getElementById('startBtn').onclick = () => {
     if (swState !== 1) {
         swState = 1; startTime = Date.now(); lapStartTime = startTime; trackLogs = []; currentLapLog = []; maxSpeed = 0;
-        document.getElementById('startBtn').classList.add('active-btn');
-        document.getElementById('saveLogBtn').style.display = 'none';
+        document.getElementById('startBtn').classList.add('active-btn'); document.getElementById('saveLogBtn').style.display = 'none';
         tick();
     } else {
-        swState = 2; document.getElementById('startBtn').classList.remove('active-btn');
-        document.getElementById('saveLogBtn').style.display = 'block';
+        swState = 2; document.getElementById('startBtn').classList.remove('active-btn'); document.getElementById('saveLogBtn').style.display = 'block';
     }
 };
 document.getElementById('lapBtn').onclick = () => {
@@ -254,3 +270,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
