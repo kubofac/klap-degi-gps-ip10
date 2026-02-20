@@ -4,47 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI ULTIMATE V2 - FINAL</title>
+    <title>KLAP DEGI - NMEA TYPE</title>
     <style>
-        :root { 
-            --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; 
-            --bg-dark: #000000; --hrc-orange: #FFA500;
-        }
-
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background-color: var(--bg-dark); color: var(--hrc-white); 
-            font-family: 'Arial Black', sans-serif; overflow: hidden; 
-        }
-
+        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; }
         #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; }
         #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
-        
-        .main-ui-container {
-            position: absolute; right: 10px; top: 100px; bottom: 70px; 
-            display: flex; align-items: flex-start; gap: 40px; z-index: 20; pointer-events: none;
-        }
-
+        .main-ui-container { position: absolute; right: 10px; top: 100px; bottom: 70px; display: flex; align-items: flex-start; gap: 40px; z-index: 20; pointer-events: none; }
         #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; }
         #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 12px #000; }
-        #display1 { font-size: 16vh; font-weight: 900; line-height: 0.9; color: var(--hrc-white); text-shadow: 4px 4px 15px #000; }
-        #display { font-size: 3.5vh; color: #bbb; text-shadow: 1px 1px 6px #000; }
-
+        #display1 { font-size: 16vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; }
+        #display { font-size: 3.5vh; color: #bbb; }
         .right-panels { display: flex; flex-direction: row; gap: 15px; height: 100%; align-items: flex-start; pointer-events: auto; }
         #lap-panel { width: 160px; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-top: 2px solid #333; }
         #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
         .lap-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px; font-weight: 900; }
         .best-lap { color: var(--hrc-red); }
-
         .data-panel { display: flex; flex-direction: column; gap: 12px; width: 100px; }
         .data-box { display: flex; flex-direction: column; align-items: flex-end; }
         .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
         .val { font-size: 36px; font-weight: 900; line-height: 0.9; }
-
-        footer { 
-            height: 55px; display: flex; gap: 4px; padding: 4px; background: #000; border-top: 1px solid #333; 
-            z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom);
-        }
+        footer { height: 55px; display: flex; gap: 4px; padding: 4px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
         button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
         #saveLogBtn { background: #155724 !important; display: none; }
         .active-btn { background: var(--hrc-red) !important; color: white !important; }
@@ -80,141 +60,129 @@
 
 <script>
 'use strict';
-
-const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-const PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
-
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, sessionMaxSpeed = 0;
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], lastLapTime = 0;
 let trackLogs = [], currentLapLog = [], lastPos = null, lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0, previousSideOfLine = null;
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
-
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- BLE接続 & ESP32パケットパース ---
+// --- BLE接続 & テキストパケット解析 ---
 async function startBle() {
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
-        
         await char.startNotifications();
+
+        const decoder = new TextDecoder();
         char.oncharacteristicvaluechanged = (e) => {
             lastBleDataTime = Date.now();
-            const d = e.target.value;
-
-            // 受信データの長さに関わらず、RPMとTempは最低限取得
-            if (d.byteLength >= 2) {
-                let hz = d.getUint16(0, true); // Little Endianで2バイト読み取り
-                currentRPM = (hz * 60) / (parseInt(localStorage.getItem('pl1')) || 1);
-            }
-            if (d.byteLength >= 3) {
-                currentTemp = d.getUint8(2);
-                document.getElementById('temp_val').textContent = currentTemp;
-            }
-
-            // GPSデータのパース (緯度経度がある場合)
-            if (d.byteLength >= 11) {
-                // 3バイト目からInt32(4byte) × 2個を読み取る
-                const latRaw = d.getInt32(3, true);
-                const lonRaw = d.getInt32(7, true);
-                
-                // 10^7で割る前の値が0でないか確認
-                if (latRaw !== 0 && lonRaw !== 0) {
-                    const lat = latRaw / 10000000;
-                    const lon = lonRaw / 10000000;
-                    
-                    // 速度 (11バイト目にあると想定)
-                    if (d.byteLength >= 12) {
-                        currentSpeedKmh = d.getUint8(11);
-                        document.getElementById('speed_val').textContent = currentSpeedKmh;
-                    }
-
-                    const cur = { lat, lon, time: Date.now(), rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
-                    
-                    if (swState === 1) {
-                        currentLapLog.push(cur);
-                        if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
-                        if (maxSpeed > sessionMaxSpeed) sessionMaxSpeed = maxSpeed;
-                        checkLap(cur);
-                    }
-                    lastPos = cur;
-                }
-            }
+            const str = decoder.decode(e.target.value);
+            parseNmea(str);
         };
-    } catch (e) { alert("BLE接続エラー: " + e); }
+    } catch (e) { alert("BLE Error: " + e); }
 }
 
-// 通過判定 (ライン跨ぎ)
+function parseNmea(str) {
+    const lines = str.split('\n');
+    lines.forEach(line => {
+        if (line.startsWith('$PKFAC')) {
+            const parts = line.split(',');
+            if (parts.length >= 3) {
+                let hz = parseInt(parts[1]);
+                currentRPM = (hz * 60) / (parseInt(localStorage.getItem('pl1')) || 1);
+                currentTemp = parseInt(parts[2]);
+                document.getElementById('temp_val').textContent = currentTemp;
+            }
+        } else if (line.startsWith('$GPRMC') || line.startsWith('$GNRMC')) {
+            const p = line.split(',');
+            if (p[2] === 'A') { // Valid status
+                const lat = parseDeg(p[3], p[4]);
+                const lon = parseDeg(p[5], p[6]);
+                currentSpeedKmh = Math.round(parseFloat(p[7]) * 1.852);
+                updateGps(lat, lon);
+            }
+        } else if (line.startsWith('$GPVTG') || line.startsWith('$GNVTG')) {
+            const p = line.split(',');
+            const speed = parseFloat(p[7]); // km/h
+            if (!isNaN(speed)) {
+                currentSpeedKmh = Math.round(speed);
+                document.getElementById('speed_val').textContent = currentSpeedKmh;
+            }
+        }
+    });
+}
+
+function parseDeg(val, dir) {
+    if (!val) return 0;
+    let d = parseFloat(val.substring(0, 2));
+    let m = parseFloat(val.substring(2)) / 60;
+    if (val.length > 10) { // Longitude case (3 digits for deg)
+        d = parseFloat(val.substring(0, 3));
+        m = parseFloat(val.substring(3)) / 60;
+    }
+    return (dir === 'S' || dir === 'W') ? -(d + m) : (d + m);
+}
+
+function updateGps(lat, lon) {
+    document.getElementById('speed_val').textContent = currentSpeedKmh;
+    if (lat === 0 || lon === 0) return;
+    const cur = { lat, lon, time: Date.now(), rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
+    if (swState === 1) {
+        currentLapLog.push(cur);
+        if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
+        if (maxSpeed > sessionMaxSpeed) sessionMaxSpeed = maxSpeed;
+        checkLap(cur);
+    }
+    lastPos = cur;
+}
+
 function checkLap(cur) {
     if (LAP_LINE_P1.lat === 0 || !lastPos) return;
     const side = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (cur.lat - LAP_LINE_P1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (cur.lon - LAP_LINE_P1.lon);
-    
     if (previousSideOfLine !== null && ((previousSideOfLine > 0 && side < 0) || (previousSideOfLine < 0 && side > 0))) {
-        const now = Date.now();
-        if (now - lastLapTime >= (parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000)) {
-            processLap(now, true);
-        }
+        if (Date.now() - lastLapTime >= (parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000)) processLap(Date.now(), true);
     }
     previousSideOfLine = side;
 }
 
-// ラップ確定
 function processLap(exactTime, useFreeze) {
     const lapTime = exactTime - (lapStartTime || startTime);
     lapRecords.unshift(lapTime);
     trackLogs.push([...currentLapLog]);
     currentLapLog = [];
-    
-    const finishedMax = maxSpeed; 
-    maxSpeed = 0; 
-    lapStartTime = exactTime; 
-    lastLapTime = exactTime;
-
+    const finishedMax = maxSpeed; maxSpeed = 0;
+    lapStartTime = exactTime; lastLapTime = exactTime;
     const d = document.getElementById('lap'); d.innerHTML = "";
     const best = Math.min(...lapRecords);
     lapRecords.forEach((t, i) => {
         const r = document.createElement('div'); r.className = `lap-row ${t === best ? 'best-lap' : ''}`;
         r.innerHTML = `<span>L${lapRecords.length-i}</span><span>${timeFormat(t)}</span>`; d.appendChild(r);
     });
-
     if (useFreeze) {
-        isFrozen = true; 
-        freezeDisplayTime = timeFormat(lapTime);
+        isFrozen = true; freezeDisplayTime = timeFormat(lapTime);
         document.getElementById('max_speed_val').textContent = finishedMax;
         document.getElementById('max_speed_val').style.color = (finishedMax >= sessionMaxSpeed) ? "var(--hrc-red)" : "#FFA500";
         freezeStartTime = Date.now();
     }
 }
 
-// 保存機能 (Bluefy/iOSコピー方式)
 function exportGPX() {
     const all = [...trackLogs]; if (currentLapLog.length > 0) all.push(currentLapLog);
-    if (all.length === 0 || all[0].length === 0) { alert("有効なログがありません"); return; }
-    
-    const chunks = ['<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULT" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">'];
-    all.forEach((lap, i) => {
-        chunks.push(`<trk><name>Lap ${i+1}</name><trkseg>`);
-        lap.forEach(p => {
-            chunks.push(`<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.time).toISOString()}</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${Math.round(p.rpm)}</gpxtpx:hr><gpxtpx:atemp>${p.temp}</gpxtpx:atemp></gpxtpx:TrackPointExtension><speed>${(p.speed / 3.6).toFixed(2)}</speed></extensions></trkpt>`);
-        });
-        chunks.push(`</trkseg></trk>`);
+    if (all.length === 0 || all[0].length === 0) { alert("No valid data."); return; }
+    const chunks = ['<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULT" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Log</name><trkseg>'];
+    all.flat().forEach(p => {
+        chunks.push(`<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.time).toISOString()}</time><extensions><speed>${(p.speed / 3.6).toFixed(2)}</speed></extensions></trkpt>`);
     });
-    chunks.push(`</gpx>`);
-    
-    const gpxText = chunks.join('');
-    const old = document.getElementById('save-overlay'); if (old) old.remove();
-    const overlay = document.createElement('div'); overlay.id = 'save-overlay';
-    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:#111; z-index:10000; display:flex; flex-direction:column; padding:20px; box-sizing:border-box;";
-    overlay.innerHTML = `<h3 style="color:white; font-size:14px;">GPX LOG SAVE (COPY & PASTE)</h3><textarea id="gpx-text-area" readonly style="flex:1; width:100%; background:#000; color:#0f0; font-family:monospace; font-size:10px; padding:10px;">${gpxText}</textarea>
-        <div style="display:flex; gap:10px; margin-top:15px;"><button id="copy-btn" style="flex:1; background:#E4002B; color:white; padding:15px; border:none; font-weight:bold;">COPY ALL</button><button onclick="document.getElementById('save-overlay').remove()" style="flex:1; background:#444; color:white; padding:15px; border:none;">CLOSE</button></div>`;
+    chunks.push(`</trkseg></trk></gpx>`);
+    const overlay = document.createElement('div');
+    overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:#111;z-index:10000;padding:20px;display:flex;flex-direction:column;";
+    overlay.innerHTML = `<textarea id="t" style="flex:1;width:100%;background:#000;color:#0f0;font-size:10px;">${chunks.join('')}</textarea>
+    <button onclick="document.getElementById('t').select();document.execCommand('copy');alert('Copied!')" style="padding:20px;background:red;color:white;">COPY & CLOSE</button><button onclick="this.parentElement.remove()" style="padding:10px;color:white;">CANCEL</button>`;
     document.body.appendChild(overlay);
-    document.getElementById('copy-btn').onclick = () => {
-        const area = document.getElementById('gpx-text-area'); area.select(); area.setSelectionRange(0, 999999);
-        document.execCommand('copy'); alert("クリップボードにコピーしました");
-    };
 }
 
 function timeFormat(ms) {
@@ -236,27 +204,16 @@ function tick() {
     requestAnimationFrame(tick);
 }
 
-// 状態監視インジケーター & 設定警告
 setInterval(() => {
-    const bBtn = document.getElementById('btConnect');
-    const rBtn = document.getElementById('reloadBtn');
-    const now = Date.now();
-
-    // BLE受信中なら赤
-    if (lastBleDataTime !== 0 && (now - lastBleDataTime < 2000)) {
-        bBtn.classList.add('active-btn'); bBtn.textContent = "BLE FIXED";
-    } else {
-        bBtn.classList.remove('active-btn'); bBtn.textContent = "BLE START";
-    }
-
-    // 設定不足ならオレンジ (localStorageの重要項目をチェック)
-    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('startLineP2Lat') && localStorage.getItem('pl1');
+    const bBtn = document.getElementById('btConnect'), rBtn = document.getElementById('reloadBtn');
+    if (Date.now() - lastBleDataTime < 2000) { bBtn.classList.add('active-btn'); bBtn.textContent = "BLE FIXED"; }
+    else { bBtn.classList.remove('active-btn'); bBtn.textContent = "BLE START"; }
+    const hasConfig = localStorage.getItem('startLineP1Lat') && localStorage.getItem('pl1');
     rBtn.style.backgroundColor = hasConfig ? "#1a1a1a" : "var(--hrc-orange)";
 }, 1000);
 
 document.getElementById('btConnect').onclick = startBle;
 document.getElementById('saveLogBtn').onclick = exportGPX;
-
 document.getElementById('startBtn').onclick = () => {
     if (swState !== 1) {
         swState = 1; startTime = Date.now(); lapStartTime = startTime; trackLogs = []; currentLapLog = []; maxSpeed = 0;
@@ -268,16 +225,10 @@ document.getElementById('startBtn').onclick = () => {
         document.getElementById('saveLogBtn').style.display = 'block';
     }
 };
-
 document.getElementById('lapBtn').onclick = () => {
     if(swState === 1) processLap(Date.now(), false);
-    else {
-        swState = 0; lapRecords = []; trackLogs = []; currentLapLog = []; maxSpeed = 0; sessionMaxSpeed = 0;
-        document.getElementById('max_speed_val').textContent = "0"; document.getElementById('lap').innerHTML = "";
-        document.getElementById('display1').textContent = "00:00.000"; document.getElementById('display').textContent = "TOTAL 00:00.000";
-    }
+    else { swState = 0; lapRecords = []; trackLogs = []; currentLapLog = []; maxSpeed = 0; sessionMaxSpeed = 0; document.getElementById('max_speed_val').textContent = "0"; document.getElementById('lap').innerHTML = ""; document.getElementById('display1').textContent = "00:00.000"; document.getElementById('display').textContent = "TOTAL 00:00.000"; }
 };
-
 document.getElementById('reloadBtn').onclick = () => location.reload();
 
 function drawTacho(rpm) {
@@ -286,34 +237,20 @@ function drawTacho(rpm) {
     const sX = 20, hY = 80, bY = h - 20, rad = bY - hY, curveEnd = 30;
     for (let i = 0; i <= segments; i++) {
         let x, y, ang, prog;
-        if (i <= curveEnd) {
-            prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad;
-        } else {
-            prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI;
-        }
-        if (i % 10 === 0 || i === segments) {
-            ctx.save(); ctx.fillStyle = i < active ? "#fff" : "#444"; ctx.font = "italic bold 20px Arial"; ctx.textAlign = "center";
-            ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); ctx.restore();
-        }
-        if (i < segments) {
-            ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222";
-            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore();
-        }
+        if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad; }
+        else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI; }
+        if (i % 10 === 0 || i === segments) { ctx.save(); ctx.fillStyle = i < active ? "#fff" : "#444"; ctx.font = "italic bold 20px Arial"; ctx.textAlign = "center"; ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); ctx.restore(); }
+        if (i < segments) { ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222"; ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore(); }
     }
     document.getElementById('rpm_val').textContent = Math.floor(rpm);
 }
-
 window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
 window.onload = () => {
     window.dispatchEvent(new Event('resize'));
     const p1 = localStorage.getItem('startLineP1Lat');
-    if (p1) {
-        LAP_LINE_P1 = { lat: parseFloat(p1), lon: parseFloat(localStorage.getItem('startLineP1Lon')) };
-        LAP_LINE_P2 = { lat: parseFloat(localStorage.getItem('startLineP2Lat')), lon: parseFloat(localStorage.getItem('startLineP2Lon')) };
-    }
+    if (p1) { LAP_LINE_P1 = { lat: parseFloat(p1), lon: parseFloat(localStorage.getItem('startLineP1Lon')) }; LAP_LINE_P2 = { lat: parseFloat(localStorage.getItem('startLineP2Lat')), lon: parseFloat(localStorage.getItem('startLineP2Lon')) }; }
     (function render(){ drawTacho(currentRPM); requestAnimationFrame(render); })();
 };
 </script>
 </body>
 </html>
-
