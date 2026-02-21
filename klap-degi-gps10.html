@@ -322,25 +322,36 @@ function processLap(exactTime, useFreeze) {
 
 async function exportGPX() {
     if (logData.length < 5) return;
-    
-    // 1. GPX文字列の生成（ここは変更なし）
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx ...`; 
-    // ... 中身のループ処理 ...
-    gpx += `\n</trkseg></trk></gpx>`;
 
-    // 2. 「１」の対策：バイナリ形式としてBlobとFileを生成
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
+
+    // 記録した全データを解析アプリが読める「ラップごとの<trk>」に小分けする
+    let lapNumber = 1;
+    gpx += `\n<trk><name>L${lapNumber}</name><trkseg>`;
+
+    // ロギング中にラップが切られた時刻のリストを作成
+    // ※実際にはlogData内の座標とライン判定で分けるのが理想ですが、
+    // 最も確実なのは解析アプリ側が認識できるよう、logDataを一つのtrkとして出力しつつ、
+    // 解析アプリ側で「1つのtrkを読み込める」ようにすることです。
+    
+    // 【暫定対応】解析アプリのparseGPXに合わせ、全データを「L1」という名前のtrkに包む
+    logData.forEach(p => {
+        const cleanTime = p.t.substring(0, 19) + "Z";
+        gpx += `\n<trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}">
+          <time>${cleanTime}</time>
+          <speed>${p.sp}</speed>
+          <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>
+        </trkpt>`;
+    });
+
+    gpx += `\n</trkseg></trk>\n</gpx>`;
+
     const blob = new Blob([gpx], { type: 'application/octet-stream' });
     const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
 
-    // 3. 「２」の対策：共有内容を「ファイルのみ」に限定
     if (navigator.share) {
-        try {
-            await navigator.share({
-                files: [file] // titleやtextは一切書かない
-            });
-        } catch (e) {
-            console.log("Export cancelled");
-        }
+        try { await navigator.share({ files: [file] }); } catch (e) {}
     }
 }
 
@@ -456,6 +467,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
