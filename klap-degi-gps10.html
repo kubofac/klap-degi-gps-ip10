@@ -268,18 +268,28 @@ async function ble() {
 }
 
 function processLap(now, isAuto) {
+    // 1. ボタンを押した瞬間の「真の時刻と座標」をログに強制挿入して精度を確保
+    if (swState === 1) {
+        logData.push({
+            t: new Date(now).toISOString(), // ミリ秒を含むISO形式
+            la: lat, 
+            lo: lon,
+            sp: (currentSpeedKmh / 3.6).toFixed(2), 
+            r: Math.round(currentRPM),
+            isLap: true // 解析ソフト用の分割フラグ
+        });
+    }
+
+    // 2. ラップタイムの計算
     const lapTime = now - lastLapTime;
     lastLapTime = now;
     lapRecords.unshift(lapTime);
 
-    if (logData && logData.length > 0) {
-        logData[logData.length - 1].isLap = true;
-    }
-
+    // 3. UI表示の更新
     const display1 = document.getElementById('display1');
 
     if (isAuto) {
-        // --- 自動ラップの場合のみ15秒固定表示を行う ---
+        // 自動ラップ時は15秒固定（白文字）
         isFrozen = true;
         freezeDisplayTime = timeFormat(lapTime);
         freezeStartTime = now;
@@ -289,13 +299,12 @@ function processLap(now, isAuto) {
             isFrozen = false;
         }, 15000);
     } else {
-        // --- 手動ラップの場合は固定せず、すぐに次の周回の表示へ ---
+        // 手動ラップ時はすぐにリセット表示
         isFrozen = false;
-        // 即座に 00:00.000 からのカウントアップに見えるよう、表示を更新
         display1.innerText = timeFormat(0);
     }
 
-    // ラップ履歴（横のリスト）の更新
+    // ラップ履歴リストの更新
     const lapDiv = document.getElementById('lap');
     const bestTime = Math.min(...lapRecords);
     lapDiv.innerHTML = lapRecords.map((t, i) => {
@@ -312,26 +321,61 @@ function processLap(now, isAuto) {
 }
 
 async function exportGPX() {
-    if (logData.length < 5) { alert("ログ不足"); return; }
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
+    if (logData.length < 5) {
+        alert("ログデータが不足しています");
+        return;
+    }
+
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_ULTIMATE" 
+  xmlns="http://www.topografix.com/GPX/1/1" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
+  xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
+
     let lapCount = 1;
     gpx += `\n<trk><name>L${lapCount}</name><trkseg>`;
+
     logData.forEach((p, index) => {
-        gpx += `\n<trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}"><time>${p.t.substring(0,19)}Z</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>`;
+        // ★修正：ミリ秒を保持するため、p.t（ISOString）をそのまま使用する
+        const fullTime = p.t; 
+        
+        gpx += `\n    <trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}">
+      <time>${fullTime}</time>
+      <speed>${p.sp}</speed>
+      <extensions>
+        <gpxtpx:TrackPointExtension>
+          <gpxtpx:hr>${p.r}</gpxtpx:hr>
+        </gpxtpx:TrackPointExtension>
+      </extensions>
+    </trkpt>`;
+
+        // isLapフラグがある場所でトラック（ラップ）を分割
         if (p.isLap && index < logData.length - 1) {
             lapCount++;
-            gpx += `\n</trkseg></trk>\n<trk><name>L${lapCount}</name><trkseg>`;
+            gpx += `\n  </trkseg></trk>\n<trk><name>L${lapCount}</name><trkseg>`;
         }
     });
-    gpx += `\n</trkseg></trk>\n</gpx>`;
+
+    gpx += `\n  </trkseg></trk>\n</gpx>`;
+
     try {
         const blob = new Blob([gpx], { type: 'application/octet-stream' });
-        const file = new File([blob], `KLAP_${Date.now()}.gpx`, { type: 'application/octet-stream' });
-        if (navigator.share) await navigator.share({ files: [file] });
-        else {
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+        const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
+
+        if (navigator.share) {
+            await navigator.share({ files: [file] });
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            a.click();
+            URL.revokeObjectURL(url);
         }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error("Export failed:", e);
+    }
 }
 
 function timeFormat(ms) {
@@ -431,4 +475,5 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
