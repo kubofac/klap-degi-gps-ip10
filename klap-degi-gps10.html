@@ -3,86 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE DIAGNOSTIC</title>
+    <title>BLE STABLE-AX</title>
     <style>
         body { background: #000; color: #0f0; font-family: monospace; padding: 20px; font-size: 14px; }
-        .log-box { border: 1px solid #444; padding: 10px; height: 200px; overflow-y: scroll; background: #111; margin-bottom: 20px; }
+        .log-box { border: 1px solid #444; padding: 10px; height: 150px; overflow-y: scroll; background: #111; margin-bottom: 20px; }
         .stat-item { margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 5px; }
         .val { color: #fff; font-size: 24px; font-weight: bold; }
-        button { width: 100%; height: 60px; background: #E4002B; color: white; border: none; font-size: 18px; margin-top: 10px; }
+        button { width: 100%; height: 60px; background: #E4002B; color: white; border: none; font-size: 18px; margin-top: 10px; border-radius: 8px; }
         .error { color: #ff4444; }
     </style>
 </head>
 <body>
 
-    <h3>BLE STEP DIAGNOSIS</h3>
-    <div class="log-box" id="log">--- LOG START ---<br></div>
+    <h3>BLE DIAGNOSIS (iOS/Android)</h3>
+    <div class="log-box" id="log">--- STANDBY ---<br></div>
 
     <div class="stat-item">STEP: <span id="step" class="val">IDLE</span></div>
     <div class="stat-item">RECV COUNT: <span id="count" class="val">0</span></div>
     <div class="stat-item">LAST DATA: <span id="rawdata" class="val">NONE</span></div>
     <div class="stat-item">Hz: <span id="hz" class="val">0</span> / TEMP: <span id="temp" class="val">0</span></div>
 
-    <button id="btn">CONNECT NEW UNIT</button>
+    <button id="btn">CONNECT UNIT</button>
 
 <script>
 const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
 const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb63f";
 let recvCount = 0;
 
+function addLog(msg, isError = false) {
+    const log = document.getElementById('log');
+    log.innerHTML += `<span class="${isError?'error':''}">> ${msg}</span><br>`;
+    log.scrollTop = log.scrollHeight;
+}
+
 document.getElementById('btn').onclick = async () => {
     try {
+        addLog("1. Requesting Device...");
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [S_UUID] }]
         });
+
+        addLog("2. Connecting...");
         const server = await device.gatt.connect();
         
-        // 接続直後の不安定さを回避
+        // iOSのキャッシュ・安定化のための待機
+        addLog("3. Waiting for stabilization...");
         await new Promise(r => setTimeout(r, 2000));
-        
+
+        addLog("4. Getting Service & Char...");
         const service = await server.getPrimaryService(S_UUID);
         const char = await service.getCharacteristic(C_UUID);
 
-char.oncharacteristicvaluechanged = (event) => {
+        // ★重要：通知をONにする前に受け皿を作る（iPhone対策）
+        char.oncharacteristicvaluechanged = (event) => {
             recvCount++;
             document.getElementById('count').textContent = recvCount;
             document.getElementById('step').textContent = "RECEIVING";
             
-            // 1. まずは生データ（DataView）を取得
-            let view = event.target.value;
+            // データを取得
+            const view = event.target.value;
             
-            // 2. iOSで失敗しにくい「配列変換」を行ってから値を抽出
-            let bytes = [];
-            for (let i = 0; i < view.byteLength; i++) {
-                bytes.push(view.getUint8(i));
-            }
+            // iOSでも確実に読めるように標準の配列(Uint8Array)にコピー
+            const bytes = new Uint8Array(view.buffer);
+            
+            // LAST DATA を NONE から書き換える
+            document.getElementById('rawdata').textContent = "[" + bytes.join(", ") + "]";
 
-            // 3. 画面表示の更新
             if (bytes.length >= 3) {
-                // LAST DATA に生数値を表示
-                document.getElementById('rawdata').textContent = JSON.stringify(bytes);
-                
-                // Hzの復元 (byte0 + byte1 * 256)
-                const hzVal = bytes[0] | (bytes[1] << 8);
-                const tempVal = bytes[2];
-
-                document.getElementById('hz').textContent = hzVal;
-                document.getElementById('temp').textContent = tempVal;
+                // Hz復元: byte0 + (byte1 * 256)
+                const h = bytes[0] | (bytes[1] << 8);
+                const t = bytes[2];
+                document.getElementById('hz').textContent = h;
+                document.getElementById('temp').textContent = t;
             }
         };
 
+        addLog("5. Starting Notifications...");
         await char.startNotifications();
-        document.getElementById('step').textContent = "RECEIVING";
+        
+        addLog("6. SUCCESS: Data flow active.");
 
     } catch (e) {
-        alert("Error: " + e.message);
+        addLog("ERROR: " + e.message, true);
     }
 };
 </script>
 </body>
 </html>
-
-
-
-
-
