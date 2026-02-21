@@ -4,48 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI - STABLE MODE</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>KLAP DEGI STABLE V2</title>
     <style>
-        /* スタイル部分は変更なしのため維持 */
         :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; }
-        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
+        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
         #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
-        #debug-monitor { position: absolute; top: 10px; left: 10px; width: 280px; background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 5px; padding: 8px; font-family: monospace; font-size: 11px; color: #0f0; z-index: 1000; pointer-events: none; }
-        .debug-val { color: #fff; font-weight: bold; }
-        .main-ui-container { position: absolute; right: 10px; top: 100px; bottom: 70px; display: flex; align-items: flex-start; gap: 40px; z-index: 20; pointer-events: none; }
-        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; }
-        #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 12px #000; }
-        #display1 { font-size: 16vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; }
-        #display { font-size: 3.5vh; color: #bbb; }
-        .right-panels { display: flex; flex-direction: row; gap: 15px; height: 100%; align-items: flex-start; pointer-events: auto; }
-        #lap-panel { width: 160px; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-top: 2px solid #333; }
+
+        .main-ui-container {
+            position: absolute; right: 15px; top: 90px; bottom: 50px;
+            display: flex; flex-direction: row; align-items: flex-start; gap: 25px; z-index: 20; pointer-events: none;
+        }
+
+        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; height: 100%; justify-content: center; }
+        #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; margin-bottom: 15px; }
+        #display1 { font-size: 17vh; letter-spacing: 1px; transform: scaleX(0.95); transform-origin: right; font-weight: 900; line-height: 0.8; color: var(--hrc-white); text-shadow: 4px 4px 15px #000; white-space: nowrap; display: inline-block; }
+        #display { font-size: 3.5vh; color: #bbb; text-shadow: 1px 1px 6px #000; margin-top: 5px; }
+
+        #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; overflow: hidden; padding-top: 30px; }
         #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
-        .lap-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px; font-weight: 900; }
+        .lap-row { display: flex; justify-content: flex-end; gap: 15px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px; font-weight: 900; }
         .best-lap { color: var(--hrc-red); }
-        .data-panel { display: flex; flex-direction: column; gap: 12px; width: 100px; }
+
+        .data-panel { display: flex; flex-direction: column; gap: 12px; width: 90px; padding-top: 30px; }
         .data-box { display: flex; flex-direction: column; align-items: flex-end; }
         .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
-        .val { font-size: 36px; font-weight: 900; line-height: 0.9; }
-        footer { height: 55px; display: flex; gap: 4px; padding: 4px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
-        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
-        #saveLogBtn { background: #155724 !important; display: none; }
-        .active-btn { background: var(--hrc-red) !important; color: white !important; }
+        .val { font-size: 32px; font-weight: 900; line-height: 0.9; }
+
+        footer { height: 45px; display: flex; gap: 4px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
+        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; pointer-events: auto; }
+        #saveLogBtn { background: #155724; display: none; }
     </style>
 </head>
 <body>
 
 <div id="dashboard">
-    <div id="debug-monitor">
-        [BLE STABLE MODE]<br>
-        STATUS: <span id="dbg-status" class="debug-val">DISCONNECTED</span><br>
-        RAW: <span id="dbg-raw" style="font-size: 9px; color: #aaa;">WAITING...</span><br>
-        RPM(Hz): <span id="dbg-rpm" class="debug-val">0</span><br>
-        TEMP: <span id="dbg-temp" class="debug-val">--</span><br>
-        GPS STATUS: <span id="dbg-gps" class="debug-val">SEARCHING</span><br>
-        SPEED: <span id="dbg-speed" class="debug-val">0</span> km/h
-    </div>
-
     <canvas id="canvas"></canvas>
     <div class="main-ui-container">
         <div id="info-overlay">
@@ -53,13 +47,11 @@
             <div id="display1">00:00.000</div>
             <div id="display">TOTAL 00:00.000</div>
         </div>
-        <div class="right-panels">
-            <div id="lap-panel"><div id="lap"></div></div>
-            <div class="data-panel">
-                <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
-                <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color: #FFA500;">0</div></div>
-                <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
-            </div>
+        <div id="lap-panel"><div id="lap"></div></div>
+        <div class="data-panel">
+            <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
+            <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color:var(--hrc-orange);">0</div></div>
+            <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
         </div>
     </div>
     <footer>
@@ -74,16 +66,16 @@
 <script>
 'use strict';
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
-let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, sessionMaxSpeed = 0;
-let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], lastLapTime = 0;
-let lastBleDataTime = 0;
-let gpsFixed = false;
-let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
+let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0;
+let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [];
+let trackLogs = [], currentLapLog = [], lastBleDataTime = 0, lastGpsDataTime = 0;
+let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0;
+let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 }, previousSideOfLine = null;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
+// --- BLE 受信部（バイナリ12バイト解析） ---
 async function startBle() {
-    document.getElementById('dbg-status').textContent = "CONNECTING...";
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
@@ -91,81 +83,129 @@ async function startBle() {
         const char = await service.getCharacteristic(PULSE_UUID);
         
         await char.startNotifications();
-        document.getElementById('dbg-status').textContent = "CONNECTED";
         
         char.oncharacteristicvaluechanged = (e) => {
             lastBleDataTime = Date.now();
             const d = e.target.value; // DataView
 
-            // ★バイナリ3バイトを直接読み取り
             if (d.byteLength >= 3) {
+                // 1. RPM & TEMP (以前の安定コード)
                 const hz = d.getUint8(0) | (d.getUint8(1) << 8);
                 const temp = d.getUint8(2);
-
-                // デバッグモニタ更新
-                document.getElementById('dbg-rpm').textContent = hz;
-                document.getElementById('dbg-temp').textContent = temp + "°C";
-                document.getElementById('dbg-raw').textContent = `RECV: ${hz}Hz / ${temp}deg`;
-
-                // 数値計算
                 const pl1 = parseInt(localStorage.getItem('pl1')) || 1;
                 currentRPM = (hz * 60) / pl1;
                 currentTemp = temp;
-
-                // メイン表示の文字を更新
                 document.getElementById('temp_val').textContent = currentTemp;
+
+                // 2. GPS (新設: 12バイトパケットの場合)
+                if (d.byteLength >= 12) {
+                    const lat = d.getFloat32(3, true); 
+                    const lon = d.getFloat32(7, true);
+                    const fix = d.getUint8(11);
+                    if (fix === 1) {
+                        updateGpsData(lat, lon);
+                        lastGpsDataTime = Date.now();
+                    }
+                }
             }
         };
-    } catch (e) { 
-        document.getElementById('dbg-status').textContent = "ERROR";
-        console.error(e);
+    } catch (e) { alert("BLE Error: " + e); }
+}
+
+function updateGpsData(lat, lon) {
+    const now = Date.now();
+    const cur = { lat, lon, time: now, rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
+    
+    if (swState === 1) {
+        currentLapLog.push(cur);
+        // ラップ判定
+        if (LAP_LINE_P1.lat !== 0) {
+            const side = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (lat - LAP_LINE_P1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (lon - LAP_LINE_P1.lon);
+            if (previousSideOfLine !== null && ((previousSideOfLine > 0 && side < 0) || (previousSideOfLine < 0 && side > 0))) {
+                if (now - (lapStartTime || startTime) > 10000) processLap(now, true);
+            }
+            previousSideOfLine = side;
+        }
     }
 }
 
-// --- 以下、描画とタイマーのロジック ---
+function processLap(exactTime, useFreeze) {
+    const lapTime = exactTime - (lapStartTime || startTime);
+    lapRecords.unshift(lapTime);
+    trackLogs.push([...currentLapLog]);
+    currentLapLog = [];
+    lapStartTime = exactTime;
+
+    const d = document.getElementById('lap'); d.innerHTML = "";
+    const best = Math.min(...lapRecords);
+    lapRecords.forEach((t, i) => {
+        const r = document.createElement('div'); r.className = `lap-row ${t === best ? 'best-lap' : ''}`;
+        r.innerHTML = `<span>L${lapRecords.length-i}</span><span>${timeFormat(t)}</span>`; d.appendChild(r);
+    });
+    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTime); freezeStartTime = Date.now(); }
+}
+
+function timeFormat(ms) {
+    let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${mss.toString().padStart(3,'0')}`;
+}
 
 function drawTacho(rpm) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const w = canvas.width, h = canvas.height, segments = 75, active = Math.floor((rpm / 14000) * segments);
     const sX = 20, hY = 80, bY = h - 20, rad = bY - hY, curveEnd = 30;
-
     for (let i = 0; i <= segments; i++) {
         let x, y, ang, prog;
         if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad; }
         else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI; }
-        
-        if (i % 10 === 0 || i === segments) { 
-            ctx.save(); 
-            ctx.fillStyle = i < active ? "#fff" : "#444"; 
-            ctx.font = "italic bold 20px Arial"; 
-            ctx.textAlign = "center"; 
-            ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); 
-            ctx.restore(); 
+        if (i % 10 === 0 || i === segments) {
+            ctx.save(); ctx.fillStyle = i < active ? "#fff" : "#444"; ctx.font = "italic bold 20px Arial"; ctx.textAlign = "center";
+            ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); ctx.restore();
         }
-        if (i < segments) { 
-            ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222"; 
-            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore(); 
+        if (i < segments) {
+            ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222";
+            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore();
         }
     }
-    // メインのRPM数字
     document.getElementById('rpm_val').textContent = Math.floor(rpm);
 }
 
-// 初期化とループ
+function tick() {
+    if (swState === 1) {
+        const now = Date.now();
+        document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
+        if (isFrozen) {
+            document.getElementById('display1').textContent = freezeDisplayTime;
+            if (now - freezeStartTime > 10000) isFrozen = false;
+        } else {
+            document.getElementById('display1').textContent = timeFormat(now - lapStartTime);
+        }
+    }
+    requestAnimationFrame(tick);
+}
+
+// ボタン制御
+document.getElementById('btConnect').onclick = startBle;
+document.getElementById('reloadBtn').onclick = () => location.reload();
+document.getElementById('startBtn').onclick = () => {
+    if(swState !== 1) { swState = 1; startTime = Date.now(); lapStartTime = startTime; tick(); }
+    else { swState = 2; document.getElementById('saveLogBtn').style.display = 'block'; }
+};
+document.getElementById('lapBtn').onclick = () => {
+    if(swState === 1) processLap(Date.now(), false);
+    else { swState = 0; lapRecords = []; document.getElementById('lap').innerHTML = ""; }
+};
+
 window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
 window.onload = () => {
     window.dispatchEvent(new Event('resize'));
-    // 描画ループ開始
-    (function render(){ 
-        drawTacho(currentRPM); 
-        requestAnimationFrame(render); 
-    })();
+    const p1 = localStorage.getItem('startLineP1Lat');
+    if (p1) {
+        LAP_LINE_P1 = { lat: parseFloat(p1), lon: parseFloat(localStorage.getItem('startLineP1Lon')) };
+        LAP_LINE_P2 = { lat: parseFloat(localStorage.getItem('startLineP2Lat')), lon: parseFloat(localStorage.getItem('startLineP2Lon')) };
+    }
+    (function r(){ drawTacho(currentRPM); requestAnimationFrame(r); })();
 };
-
-document.getElementById('btConnect').onclick = startBle;
-document.getElementById('reloadBtn').onclick = () => location.reload();
 </script>
 </body>
 </html>
-
-
