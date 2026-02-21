@@ -1,179 +1,87 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEBUG MODE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE DIAGNOSTIC</title>
     <style>
-        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; }
-        
-        /* デバッグモニター */
-        #debug-monitor {
-            position: absolute; top: 10px; left: 10px; width: 250px; 
-            background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 8px;
-            font-family: monospace; font-size: 11px; color: #0f0; z-index: 1000; pointer-events: none;
-        }
-        .debug-val { color: #fff; font-weight: bold; }
-
-        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; }
-        #canvas { position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 60px); z-index: 1; }
-
-        .main-ui-container {
-            position: absolute; right: 15px; top: 90px; bottom: 60px;
-            display: flex; align-items: flex-start; gap: 20px; z-index: 20; pointer-events: none;
-        }
-
-        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
-        #rpm_val { font-size: 10vh; font-weight: 900; line-height: 0.8; text-shadow: 2px 2px 10px #000; }
-        #display1 { font-size: 15vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 15px #000; }
-        #display { font-size: 3vh; color: #bbb; }
-
-        .data-panel { display: flex; flex-direction: column; gap: 10px; width: 80px; }
-        .data-box { display: flex; flex-direction: column; align-items: flex-end; }
-        .label { font-size: 10px; color: var(--hrc-red); }
-        .val { font-size: 30px; font-weight: 900; }
-
-        footer { height: 55px; display: flex; gap: 4px; padding: 4px; background: #000; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; }
-        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; }
-        
-        /* 状態によるボタン色 */
-        .btn-active { background-color: var(--hrc-red) !important; color: white !important; }
-        .btn-wait { background-color: var(--hrc-blue) !important; }
+        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; font-size: 14px; }
+        .log-box { border: 1px solid #444; padding: 10px; height: 200px; overflow-y: scroll; background: #111; margin-bottom: 20px; }
+        .stat-item { margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .val { color: #fff; font-size: 24px; font-weight: bold; }
+        button { width: 100%; height: 60px; background: #E4002B; color: white; border: none; font-size: 18px; margin-top: 10px; }
+        .error { color: #ff4444; }
     </style>
 </head>
 <body>
 
-<div id="debug-monitor">
-    [BLE DEBUG]<br>
-    STATUS: <span id="dbg-status" class="debug-val">DISCONNECTED</span><br>
-    RECV: <span id="dbg-raw" class="debug-val">NONE</span><br>
-    Hz: <span id="dbg-hz" class="debug-val">0</span> / TEMP: <span id="dbg-temp" class="debug-val">--</span><br>
-    GPS: <span id="dbg-gps" class="debug-val">NO DATA</span>
-</div>
+    <h3>BLE STEP DIAGNOSIS</h3>
+    <div class="log-box" id="log">--- LOG START ---<br></div>
 
-<div id="dashboard">
-    <canvas id="canvas"></canvas>
-    <div class="main-ui-container">
-        <div id="info-overlay">
-            <div id="rpm_val">0</div>
-            <div id="display1">00:00.000</div>
-            <div id="display">TOTAL 00:00.000</div>
-        </div>
-        <div class="data-panel">
-            <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
-            <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
-        </div>
-    </div>
-    <footer>
-        <button id="btConnect">BLE START</button>
-        <button id="startBtn">TIMER</button>
-        <button id="lapBtn">RESET</button>
-        <button id="reloadBtn">RELOAD</button>
-    </footer>
-</div>
+    <div class="stat-item">STEP: <span id="step" class="val">IDLE</span></div>
+    <div class="stat-item">RECV COUNT: <span id="count" class="val">0</span></div>
+    <div class="stat-item">LAST DATA: <span id="rawdata" class="val">NONE</span></div>
+    <div class="stat-item">Hz: <span id="hz" class="val">0</span> / TEMP: <span id="temp" class="val">0</span></div>
+
+    <button id="btn">CONNECT NEW UNIT</button>
 
 <script>
-'use strict';
-const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
-const PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb63f";
-let currentRPM = 0, currentTemp = 0, lastBleDataTime = 0;
-let swState = 0, startTime = 0, lapStartTime = 0;
-const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
+const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb63f";
+let recvCount = 0;
 
-async function startBle() {
-    const statusEl = document.getElementById('dbg-status');
-    const connectBtn = document.getElementById('btConnect');
-    statusEl.textContent = "SEARCHING...";
-    
+function addLog(msg, isError = false) {
+    const log = document.getElementById('log');
+    log.innerHTML += `<span class="${isError?'error':''}">> ${msg}</span><br>`;
+    log.scrollTop = log.scrollHeight;
+    console.log(msg);
+}
+
+document.getElementById('btn').onclick = async () => {
     try {
-        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        addLog("1. Requesting Device...");
+        document.getElementById('step').textContent = "REQUESTING";
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [S_UUID] }]
+        });
+
+        addLog(`Found: ${device.name}`);
+        document.getElementById('step').textContent = "CONNECTING";
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        const char = await service.getCharacteristic(PULSE_UUID);
+
+        addLog("2. Getting Service...");
+        const service = await server.getPrimaryService(S_UUID);
+
+        addLog("3. Getting Characteristic...");
+        const char = await service.getCharacteristic(C_UUID);
+
+        addLog("4. Starting Notifications...");
+        document.getElementById('step').textContent = "STARTING NOTIFY";
         
-        await char.startNotifications();
-        statusEl.textContent = "CONNECTED";
-        connectBtn.classList.add('btn-active'); // 接続されたら赤くする
-
         char.oncharacteristicvaluechanged = (event) => {
-            lastBleDataTime = Date.now();
-            const d = event.target.value; // DataView
+            recvCount++;
+            const d = event.target.value;
+            document.getElementById('count').textContent = recvCount;
+            document.getElementById('step').textContent = "RECEIVING";
             
-            // 1. まずデータが届いたこと自体を画面に即座に表示
-            document.getElementById('dbg-raw').textContent = d.byteLength + " bytes RECV";
-            document.getElementById('dbg-status').textContent = "RECEIVING";
-
-            // 2. 3バイト以上あれば値を解析
             if (d.byteLength >= 3) {
-                const hz = d.getUint8(0) | (d.getUint8(1) << 8);
-                const temp = d.getUint8(2);
-                
-                // 画面のデバッグエリアとメインエリアを直接書き換える
-                document.getElementById('dbg-hz').textContent = hz;
-                document.getElementById('dbg-temp').textContent = temp;
-                document.getElementById('temp_val').textContent = temp;
-                
-                const pl1 = parseInt(localStorage.getItem('pl1')) || 1;
-                currentRPM = (hz * 60) / pl1;
+                const h = d.getUint8(0) | (d.getUint8(1) << 8);
+                const t = d.getUint8(2);
+                document.getElementById('hz').textContent = h;
+                document.getElementById('temp').textContent = t;
+                document.getElementById('rawdata').textContent = `[${d.getUint8(0)},${d.getUint8(1)},${d.getUint8(2)}]`;
             }
         };
-    } catch (e) { 
-        statusEl.textContent = "ERROR";
-        console.error(e);
+
+        await char.startNotifications();
+        addLog("SUCCESS: Waiting for data...");
+        document.getElementById('step').textContent = "WAITING DATA";
+
+    } catch (e) {
+        addLog(`ERROR: ${e.message}`, true);
+        document.getElementById('step').textContent = "FAILED";
     }
-}
-
-function drawTacho(rpm) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const w = canvas.width, h = canvas.height, segments = 75, active = Math.floor((rpm / 14000) * segments);
-    const sX = 20, hY = 80, bY = h - 20, rad = bY - hY, curveEnd = 30;
-    for (let i = 0; i <= segments; i++) {
-        let x, y, ang, prog;
-        if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad; }
-        else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI; }
-        if (i < segments) {
-            ctx.fillStyle = i < active ? (rpm >= 12500 ? "#E4002B" : "#FFFFFF") : "#222";
-            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore();
-        }
-    }
-    document.getElementById('rpm_val').textContent = Math.floor(rpm);
-}
-
-function timeFormat(ms) {
-    let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
-    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${mss.toString().padStart(3,'0')}`;
-}
-
-// ボタンイベント
-document.getElementById('btConnect').onclick = startBle;
-document.getElementById('reloadBtn').onclick = () => location.reload();
-document.getElementById('startBtn').onclick = function() {
-    if(swState !== 1) {
-        swState = 1; startTime = Date.now(); lapStartTime = startTime;
-        this.classList.add('btn-active');
-    } else {
-        swState = 2;
-        this.classList.remove('btn-active');
-    }
-};
-
-window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
-window.onload = () => {
-    window.dispatchEvent(new Event('resize'));
-    (function render(){ 
-        drawTacho(currentRPM); 
-        if (swState === 1) {
-            const now = Date.now();
-            document.getElementById('display1').textContent = timeFormat(now - lapStartTime);
-            document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
-        }
-        requestAnimationFrame(render); 
-    })();
 };
 </script>
 </body>
 </html>
-
-
