@@ -307,51 +307,107 @@ async function ble() {
     } catch (e) { alert("BLE Error: " + e.message); }
 }
 
-function processLap(exactTime, useFreeze) {
-    const lapTime = exactTime - (lapStartTime || startTime);
-    lapRecords.unshift(lapTime);
-    lapStartTime = exactTime; lastLapTime = exactTime;
-    const d = document.getElementById('lap'); d.innerHTML = "";
-    const best = Math.min(...lapRecords);
-    lapRecords.forEach((t, i) => {
-        const r = document.createElement('div'); r.className = `lap-row ${t === best ? 'best-lap' : ''}`;
-        r.innerHTML = `<span>L${lapRecords.length-i}</span><span>${timeFormat(t)}</span>`; d.appendChild(r);
-    });
-    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTime); freezeStartTime = Date.now(); }
+function processLap(now, isAuto) {
+    // 1. ラップタイムの計算と記録
+    const lapTime = now - lastLapTime;
+    lastLapTime = now;
+    lapRecords.unshift(lapTime); // 履歴の先頭に追加
+
+    // 2. 重要：最新のログデータに「ラップの切れ目」フラグを付与
+    // これにより、GPX書き出し時にここでタグを分けることができる
+    if (logData.length > 0) {
+        logData[logData.length - 1].isLap = true;
+    }
+
+    // 3. UIの表示更新
+    const display1 = document.getElementById('display1');
+    const lapDiv = document.getElementById('lap');
+    
+    // 画面中央にラップタイムをフリーズ表示（15秒間）
+    display1.innerText = formatTime(lapTime);
+    display1.style.color = "#FFD700"; // ラップ通過時はゴールドに
+    
+    setTimeout(() => {
+        display1.style.color = "var(--hrc-white)";
+    }, 15000);
+
+    // 履歴一覧を更新
+    const bestTime = Math.min(...lapRecords);
+    lapDiv.innerHTML = lapRecords.map((t, i) => `
+        <div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
+            <span>L${lapRecords.length - i}</span>
+            <span>${formatTime(t)}</span>
+        </div>
+    `).join('');
+
+    // 音や振動でライダーに通知（任意）
+    if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
 }
 
 async function exportGPX() {
-    if (logData.length < 5) return;
+    if (logData.length < 5) {
+        alert("ログデータが不足しています");
+        return;
+    }
 
+    // GPXヘッダー（解析アプリ互換形式）
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
+<gpx version="1.1" creator="KLAP_ULTIMATE" 
+  xmlns="http://www.topografix.com/GPX/1/1" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
+  xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
 
-    // 記録した全データを解析アプリが読める「ラップごとの<trk>」に小分けする
-    let lapNumber = 1;
-    gpx += `\n<trk><name>L${lapNumber}</name><trkseg>`;
+    let lapCount = 1;
+    // 最初のラップ開始
+    gpx += `\n<trk><name>L${lapCount}</name><trkseg>`;
 
-    // ロギング中にラップが切られた時刻のリストを作成
-    // ※実際にはlogData内の座標とライン判定で分けるのが理想ですが、
-    // 最も確実なのは解析アプリ側が認識できるよう、logDataを一つのtrkとして出力しつつ、
-    // 解析アプリ側で「1つのtrkを読み込める」ようにすることです。
-    
-    // 【暫定対応】解析アプリのparseGPXに合わせ、全データを「L1」という名前のtrkに包む
-    logData.forEach(p => {
+    logData.forEach((p, index) => {
+        // 時刻を秒単位に整形
         const cleanTime = p.t.substring(0, 19) + "Z";
-        gpx += `\n<trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}">
-          <time>${cleanTime}</time>
-          <speed>${p.sp}</speed>
-          <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>
-        </trkpt>`;
+        
+        // トラックポイント書き込み
+        gpx += `\n    <trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}">
+      <time>${cleanTime}</time>
+      <speed>${p.sp}</speed>
+      <extensions>
+        <gpxtpx:TrackPointExtension>
+          <gpxtpx:hr>${p.r}</gpxtpx:hr>
+        </gpxtpx:TrackPointExtension>
+      </extensions>
+    </trkpt>`;
+
+        // ラップフラグ(isLap)がある場所で、trkタグを切り替える
+        // ただし、最後のポイントの時はtrksegを閉じる処理が外にあるので、indexチェックを入れる
+        if (p.isLap && index < logData.length - 1) {
+            lapCount++;
+            gpx += `\n  </trkseg></trk>\n<trk><name>L${lapCount}</name><trkseg>`;
+        }
     });
 
-    gpx += `\n</trkseg></trk>\n</gpx>`;
+    // 最後の閉じタグ
+    gpx += `\n  </trkseg></trk>\n</gpx>`;
 
-    const blob = new Blob([gpx], { type: 'application/octet-stream' });
-    const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
+    // 共有用ファイルの生成（iOS/Android両対応）
+    try {
+        const blob = new Blob([gpx], { type: 'application/octet-stream' });
+        const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
 
-    if (navigator.share) {
-        try { await navigator.share({ files: [file] }); } catch (e) {}
+        if (navigator.share) {
+            await navigator.share({
+                files: [file] // テキスト生成を防ぐため、filesのみ渡す
+            });
+        } else {
+            // PCブラウザ等のフォールバック
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    } catch (e) {
+        console.error("Export failed:", e);
     }
 }
 
@@ -467,6 +523,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
