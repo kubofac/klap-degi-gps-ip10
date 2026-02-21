@@ -30,58 +30,53 @@ const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
 const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb63f";
 let recvCount = 0;
 
-function addLog(msg, isError = false) {
-    const log = document.getElementById('log');
-    log.innerHTML += `<span class="${isError?'error':''}">> ${msg}</span><br>`;
-    log.scrollTop = log.scrollHeight;
-}
-
 document.getElementById('btn').onclick = async () => {
     try {
-        addLog("1. Requesting...");
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [S_UUID] }]
         });
         const server = await device.gatt.connect();
-        addLog("2. Connected. Waiting 3s...");
-        await new Promise(r => setTimeout(r, 3000));
-
+        
+        // 接続直後の不安定さを回避
+        await new Promise(r => setTimeout(r, 2000));
+        
         const service = await server.getPrimaryService(S_UUID);
         const char = await service.getCharacteristic(C_UUID);
 
         char.oncharacteristicvaluechanged = (event) => {
             recvCount++;
             document.getElementById('count').textContent = recvCount;
-            document.getElementById('step').textContent = "RECEIVING";
             
-            // --- 修正：生のバイト配列を直接読み出し ---
-            const view = event.target.value;
-            let bytes = [];
-            for (let i = 0; i < view.byteLength; i++) {
-                bytes.push(view.getUint8(i));
+            // --- ここが超重要！ ---
+            // DataViewから生のバイト配列に変換
+            let dataView = event.target.value;
+            let vals = [];
+            for (let i = 0; i < dataView.byteLength; i++) {
+                vals.push(dataView.getUint8(i));
             }
 
-            // LAST DATA に [170, 1, 42] のように生表示
-            document.getElementById('rawdata').textContent = JSON.stringify(bytes);
+            // LAST DATA に [170, 1, 55] のように文字で強制書き込み
+            const rawStr = "[" + vals.join(", ") + "]";
+            document.getElementById('rawdata').textContent = rawStr;
 
-            if (bytes.length >= 3) {
-                // リトルエンディアンで復元 (byte0 + byte1*256)
-                const hzVal = bytes[0] | (bytes[1] << 8);
-                const tempVal = bytes[2];
-                document.getElementById('hz').textContent = hzVal;
-                document.getElementById('temp').textContent = tempVal;
+            // HzとTempを計算して表示
+            if (vals.length >= 3) {
+                document.getElementById('hz').textContent = vals[0] + (vals[1] << 8);
+                document.getElementById('temp').textContent = vals[2];
             }
         };
 
         await char.startNotifications();
-        addLog("SUCCESS: Receiving...");
+        document.getElementById('step').textContent = "RECEIVING";
+
     } catch (e) {
-        addLog("ERROR: " + e.message, true);
+        alert("Error: " + e.message);
     }
 };
 </script>
 </body>
 </html>
+
 
 
 
