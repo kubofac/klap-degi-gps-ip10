@@ -2,73 +2,55 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>10Hz DIAG & LOGGER</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KLAP LOG v3.8</title>
     <style>
-        body { background: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 15px; margin: 0; }
+        body { background: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 15px; margin: 0; overflow: hidden; }
         .header { border-bottom: 2px solid #0088ff; padding-bottom: 8px; margin-bottom: 15px; }
-        
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .stat-box { background: #111; border: 1px solid #333; padding: 10px; border-radius: 5px; text-align: center; }
-        
         .data-card { background: #1a1a1a; border-left: 5px solid #0088ff; padding: 12px; border-radius: 4px; margin-bottom: 10px; }
         .label { color: #888; font-size: 11px; display: block; }
-        .val { font-size: 28px; font-weight: bold; color: #fff; line-height: 1.2; }
+        .val { font-size: 26px; font-weight: bold; color: #fff; line-height: 1.2; }
         .unit { font-size: 14px; color: #666; }
 
-        /* 操作ボタン */
         .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        button { height: 60px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; }
-        #btnConnect { background: #0088ff; grid-column: span 2; }
+        button { height: 65px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; -webkit-appearance: none; }
+        #btnConnect { background: #0044aa; grid-column: span 2; }
         #btnRecord { background: #444; }
-        #btnRecord.recording { background: #ff4444; animation: blink 1s infinite; }
-        #btnSave { background: #00aa44; }
+        #btnRecord.recording { background: #cc0000; border: 2px solid #fff; }
+        #btnSave { background: #28a745; }
 
-        @keyframes blink { 50% { opacity: 0.6; } }
-
-        #log { font-size: 11px; color: #666; height: 80px; overflow-y: scroll; background: #050505; padding: 8px; border: 1px solid #222; }
+        #log { font-size: 11px; color: #aaa; height: 100px; overflow-y: scroll; background: #050505; padding: 8px; border: 1px solid #333; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h2 style="margin:0; color:#0088ff; font-size: 18px;">KLAP LOGGING DIAG v3.5</h2>
-    </div>
+    <div class="header"><h2 style="margin:0; color:#0088ff; font-size: 18px;">KLAP LOGGING v3.8</h2></div>
 
     <div class="btn-group">
         <button id="btnConnect">1. BLE CONNECT</button>
         <button id="btnRecord">2. REC START</button>
-        <button id="btnSave">3. SAVE GPX</button>
+        <button id="btnSave">3. DOWNLOAD GPX</button>
     </div>
 
     <div class="stat-grid">
-        <div class="stat-box">
-            <div class="label">RATE</div>
-            <div id="rate" class="val" style="color: #FFA500;">0.0<span class="unit">Hz</span></div>
-        </div>
-        <div class="stat-box">
-            <div class="label">LOGGED</div>
-            <div id="log_count" class="val" style="color: #0f0;">0<span class="unit">pts</span></div>
-        </div>
+        <div class="stat-box"><div class="label">RATE</div><div id="rate" class="val">0.0<span class="unit">Hz</span></div></div>
+        <div class="stat-box"><div class="label">LOGGED</div><div id="log_count" class="val" style="color:#f0f;">0</div></div>
     </div>
 
     <div class="data-card">
-        <span class="label">GPS COORDINATES</span>
-        <div id="pos" class="val" style="font-size: 20px;">WAITING...</div>
+        <span class="label">GPS POSITION</span>
+        <div id="pos" class="val" style="font-size: 18px;">WAITING...</div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div class="data-card">
-            <span class="label">SPEED</span>
-            <div><span id="speed" class="val">0</span><span class="unit">km/h</span></div>
-        </div>
-        <div class="data-card">
-            <span class="label">RPM</span>
-            <div><span id="rpm" class="val">0</span></div>
-        </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+        <div class="data-card"><span class="label">SPD</span><span id="speed" class="val">0</span></div>
+        <div class="data-card"><span class="label">RPM</span><span id="rpm" class="val">0</span></div>
+        <div class="data-card"><span class="label">TEMP</span><span id="temp" class="val">0</span><span class="unit">℃</span></div>
     </div>
 
-    <div id="log">Ready...</div>
+    <div id="log">Ready.</div>
 
 <script>
 const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -76,25 +58,21 @@ const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 
 let isRecording = false;
 let logData = [];
-let recvCount = 0;
-let lastTime = Date.now();
 let frames = 0;
+let lastTime = Date.now();
 
 function addLog(m) {
     const l = document.getElementById('log');
-    l.innerHTML = "[" + new Date().toLocaleTimeString() + "] " + m + "<br>" + l.innerHTML;
+    l.innerHTML = "> " + m + "<br>" + l.innerHTML;
 }
 
-// 1秒ごとのレート計算
 setInterval(() => {
     const now = Date.now();
     const delta = (now - lastTime) / 1000;
-    document.getElementById('rate').textContent = (frames / delta).toFixed(1);
-    frames = 0;
-    lastTime = now;
+    if (delta > 0) document.getElementById('rate').textContent = (frames / delta).toFixed(1);
+    frames = 0; lastTime = now;
 }, 1000);
 
-// BLE接続処理
 document.getElementById('btnConnect').onclick = async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [S_UUID] }] });
@@ -105,7 +83,6 @@ document.getElementById('btnConnect').onclick = async () => {
         char.addEventListener('characteristicvaluechanged', (e) => {
             const d = e.target.value;
             frames++;
-            
             if (d.byteLength >= 13) {
                 const latInt = d.getInt32(0, true);
                 const lngInt = d.getInt32(4, true);
@@ -114,20 +91,21 @@ document.getElementById('btnConnect').onclick = async () => {
                 const hz = d.getUint16(11, true);
                 const rpm = hz * 60;
 
-                // 表示更新
-                if (latInt !== 0) {
-                    document.getElementById('pos').textContent = (latInt/1000000).toFixed(6) + "," + (lngInt/1000000).toFixed(6);
-                }
+                const lat = latInt / 1000000;
+                const lng = lngInt / 1000000;
+                
+                // 表示更新（水温 temp を含む）
+                document.getElementById('pos').textContent = (latInt === 0) ? "NO GPS FIX" : lat.toFixed(6) + "," + lng.toFixed(6);
                 document.getElementById('speed').textContent = speed;
                 document.getElementById('rpm').textContent = rpm;
+                document.getElementById('temp').textContent = temp;
 
-                // ロギング処理
-                if (isRecording && latInt !== 0) {
+                // 記録（水温は含めない）
+                if (isRecording) {
                     logData.push({
                         t: new Date().toISOString(),
-                        la: latInt / 1000000,
-                        lo: lngInt / 1000000,
-                        sp: speed / 3.6, // m/s
+                        la: lat, lo: lng,
+                        sp: (speed / 3.6).toFixed(2),
                         r: rpm
                     });
                     document.getElementById('log_count').textContent = logData.length;
@@ -135,46 +113,64 @@ document.getElementById('btnConnect').onclick = async () => {
             }
         });
         await char.startNotifications();
-        addLog("Connected at 10Hz");
-        document.getElementById('btnConnect').style.background = "#0044aa";
-        document.getElementById('btnConnect').textContent = "CONNECTED";
+        addLog("BLE Connected");
+        document.getElementById('btnConnect').innerText = "CONNECTED";
     } catch (e) { addLog("Err: " + e.message); }
 };
 
-// 記録開始・停止
 document.getElementById('btnRecord').onclick = function() {
     isRecording = !isRecording;
     if (isRecording) {
+        logData = []; 
+        document.getElementById('log_count').textContent = "0";
         this.textContent = "STOP REC";
         this.classList.add('recording');
-        addLog("Recording started...");
+        addLog("Recording...");
     } else {
         this.textContent = "REC START";
         this.classList.remove('recording');
-        addLog("Recording paused.");
+        addLog("Paused. Total: " + logData.length);
     }
 };
 
-// GPX保存 (アナライザー互換)
 document.getElementById('btnSave').onclick = () => {
-    if (logData.length === 0) return alert("No data recorded!");
+    if (logData.length < 5) {
+        addLog("Too few points to save.");
+        return;
+    }
     
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_DIAG" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
-<trk><name>DIAG_LOG</name><trkseg>`;
+    addLog("Generating File...");
     
-    logData.forEach(p => {
-        gpx += `\n<trkpt lat="${p.la}" lon="${p.lo}"><time>${p.t}</time><speed>${p.sp.toFixed(2)}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>`;
-    });
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+              '<gpx version="1.1" creator="KLAP" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">\n' +
+              '<trk><name>LOG</name><trkseg>\n';
+    
+    for (let p of logData) {
+        gpx += `<trkpt lat="${p.la}" lon="${p.lo}"><time>${p.t}</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>\n`;
+    }
 
-    gpx += `\n</trkseg></trk></gpx>`;
+    gpx += '</trkseg></trk></gpx>';
     
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `KLAP_DIAG_${Date.now()}.gpx`;
-    a.click();
-    addLog("GPX Saved. Total pts: " + logData.length);
+    try {
+        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `KLAP_${Math.floor(Date.now()/1000)}.gpx`;
+        
+        // iOS対策：bodyに追加して即クリック
+        document.body.appendChild(a);
+        a.click();
+        
+        // クリーンアップ
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            addLog("Download Triggered");
+        }, 100);
+    } catch (err) {
+        addLog("Save Error: " + err.message);
+    }
 };
 </script>
 </body>
