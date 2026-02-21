@@ -96,31 +96,26 @@ async function startBle() {
         statusEl.textContent = "CONNECTED";
         connectBtn.classList.add('btn-active'); // 接続されたら赤くする
 
-        char.oncharacteristicvaluechanged = (e) => {
+        char.oncharacteristicvaluechanged = (event) => {
             lastBleDataTime = Date.now();
-            const d = e.target.value; 
+            const d = event.target.value; // DataView
+            
+            // 1. まずデータが届いたこと自体を画面に即座に表示
+            document.getElementById('dbg-raw').textContent = d.byteLength + " bytes RECV";
+            document.getElementById('dbg-status').textContent = "RECEIVING";
 
+            // 2. 3バイト以上あれば値を解析
             if (d.byteLength >= 3) {
                 const hz = d.getUint8(0) | (d.getUint8(1) << 8);
                 const temp = d.getUint8(2);
                 
-                // デバッグ表示
+                // 画面のデバッグエリアとメインエリアを直接書き換える
                 document.getElementById('dbg-hz').textContent = hz;
                 document.getElementById('dbg-temp').textContent = temp;
-                document.getElementById('dbg-raw').textContent = `${d.byteLength} bytes`;
-
-                // メイン更新
+                document.getElementById('temp_val').textContent = temp;
+                
                 const pl1 = parseInt(localStorage.getItem('pl1')) || 1;
                 currentRPM = (hz * 60) / pl1;
-                currentTemp = temp;
-                document.getElementById('temp_val').textContent = temp;
-
-                // GPS (12バイト時)
-                if (d.byteLength >= 12) {
-                    const lat = d.getFloat32(3, true);
-                    const lon = d.getFloat32(7, true);
-                    document.getElementById('dbg-gps').textContent = lat.toFixed(4) + "," + lon.toFixed(4);
-                }
             }
         };
     } catch (e) { 
@@ -179,3 +174,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
