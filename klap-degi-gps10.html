@@ -6,95 +6,209 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>KLAP DEGI ULTIMATE V3.5</title>
-    <style>
-        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
-        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
-        #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
+<style>
+    :root { 
+        --hrc-red: #E4002B; 
+        --hrc-blue: #004098; 
+        --hrc-white: #ffffff; 
+        --bg-dark: #000000; 
+        --hrc-orange: #FFA500; 
+    }
 
-        /* 右側に寄せるメインコンテナ */
-        .main-ui-container {
-            position: absolute; 
-            right: 5px; /* 15pxから5pxに短縮（右端へ） */
-            top: 85px; 
-            bottom: 50px;
-            display: flex; 
-            flex-direction: row; 
-            align-items: flex-start; 
-            gap: 15px; /* 要素間の隙間を少し詰める */
-            z-index: 20; 
-            pointer-events: none;
-        }
+    body, html { 
+        margin: 0; 
+        padding: 0; 
+        width: 100%; 
+        height: 100%; 
+        background-color: var(--bg-dark); 
+        color: var(--hrc-white); 
+        font-family: 'Arial Black', sans-serif; 
+        overflow: hidden; 
+        position: fixed; 
+    }
 
-        /* 数値情報の块 */
-        #info-overlay { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: flex-end; /* 常に右揃え */
-            text-align: right; 
-            height: 100%; 
-            justify-content: center; 
-        }
+    #dashboard { 
+        position: relative; 
+        display: flex; 
+        flex-direction: column; 
+        height: 100dvh; 
+        width: 100vw; 
+        padding-top: env(safe-area-inset-top); 
+    }
 
-        /* 回転数数値 */
-        #rpm_val { 
-            font-size: 11vh; 
-            font-weight: 900; 
-            line-height: 0.8; 
-            text-shadow: 3px 3px 10px #000; 
-            margin-bottom: 10px; 
-            padding-right: 5px; /* 右端に寄りすぎないよう微調整 */
-        }
+    #canvas { 
+        position: absolute; 
+        top: 0; 
+        left: 0; 
+        width: 100% !important; 
+        height: calc(100% - 60px) !important; 
+        z-index: 1; 
+    }
 
-        /* メインのラップタイム表示 */
-        #display1 { 
-            font-size: 17vh; 
-            letter-spacing: -2px; /* 少し詰め気味に */
-            transform: scaleX(0.9); /* 横に少し圧縮して情報を右に寄せる */
-            transform-origin: right; 
-            font-weight: 900; 
-            line-height: 0.8; 
-            color: var(--hrc-white); 
-            text-shadow: 4px 4px 15px #000; 
-            white-space: nowrap; 
-        }
+    /* メインUIコンテナ：右端へ寄せ、位置を一段下げる */
+    .main-ui-container {
+        position: absolute; 
+        right: 5px;       /* 右端ギリギリ */
+        top: 130px;       /* 以前より下げた位置 */
+        bottom: 50px; 
+        display: flex; 
+        flex-direction: row; 
+        align-items: flex-start; 
+        gap: 15px;        /* 要素間の隙間を凝縮 */
+        z-index: 20; 
+        pointer-events: none;
+    }
 
-        /* TOTALタイム表示 */
-        #display { 
-            font-size: 3.5vh; 
-            color: #bbb; 
-            text-shadow: 1px 1px 6px #000; 
-            margin-top: 5px; 
-            padding-right: 5px;
-        }
+    /* 数値表示エリア（RPM/LAP/TOTAL） */
+    #info-overlay { 
+        display: flex; 
+        flex-direction: column; 
+        align-items: flex-end; 
+        text-align: right; 
+        height: 100%; 
+        justify-content: center; 
+    }
 
-        /* ラップ履歴パネル */
-        #lap-panel { 
-            width: 130px; /* 140pxから少しスリムに */
-            height: 100%; 
-            display: flex; 
-            flex-direction: column; 
-            border-top: none; 
-            overflow: hidden; 
-            padding-top: 30px; 
-        }
-        #lap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-        #lap::-webkit-scrollbar { display: none; }
-        .lap-row { display: flex; justify-content: flex-end; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; font-weight: 900; }
-        .best-lap { color: var(--hrc-red); }
+    /* 回転数数値 */
+    #rpm_val { 
+        font-size: 11vh; 
+        font-weight: 900; 
+        line-height: 0.8; 
+        text-shadow: 3px 3px 10px #000; 
+        margin-bottom: 10px; 
+    }
 
-        /* 右端のデータ（SPEED/TEMPなど） */
-        .data-panel { display: flex; flex-direction: column; gap: 10px; width: 85px; padding-top: 30px; }
-        .data-box { display: flex; flex-direction: column; align-items: flex-end; }
-        .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
-        .val { font-size: 30px; font-weight: 900; line-height: 0.9; }
+    /* メインラップタイム表示：右基準で少し圧縮 */
+    #display1 { 
+        font-size: 17vh; 
+        letter-spacing: -2px; 
+        transform: scaleX(0.9); 
+        transform-origin: right; 
+        font-weight: 900; 
+        line-height: 0.8; 
+        color: var(--hrc-white); 
+        text-shadow: 4px 4px 15px #000; 
+        white-space: nowrap; 
+    }
 
-        footer { height: 45px; display: flex; gap: 4px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
-        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; pointer-events: auto; }
-        #saveLogBtn { background: #155724; display: none; }
-        .demo-active { animation: demoBlink 1s infinite; }
-        @keyframes demoBlink { 0% {background-color: var(--hrc-orange); color: #000;} 50% {background-color: #885500; color: #000;} 100% {background-color: var(--hrc-orange); color: #000;} }
-    </style>
+    /* TOTAL表示 */
+    #display { 
+        font-size: 3.5vh; 
+        color: #bbb; 
+        text-shadow: 1px 1px 6px #000; 
+        margin-top: 5px; 
+    }
+
+    /* ラップ履歴パネル：スリム化 */
+    #lap-panel { 
+        width: 130px; 
+        height: calc(100% - 20px); 
+        display: flex; 
+        flex-direction: column; 
+        overflow: hidden; 
+        padding-top: 10px; 
+    }
+
+    #lap { 
+        flex: 1; 
+        overflow-y: auto; 
+        -webkit-overflow-scrolling: touch; 
+        scrollbar-width: none; 
+    }
+
+    #lap::-webkit-scrollbar { 
+        display: none; 
+    }
+
+    .lap-row { 
+        display: flex; 
+        justify-content: flex-end; 
+        gap: 10px; 
+        padding: 5px 0; 
+        border-bottom: 1px solid rgba(255,255,255,0.1); 
+        font-size: 15px; 
+        font-weight: 900; 
+    }
+
+    .best-lap { 
+        color: var(--hrc-red); 
+    }
+
+    /* 右端データ（SPEED/MAX/TEMP） */
+    .data-panel { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 10px; 
+        width: 85px; 
+        padding-top: 10px; 
+    }
+
+    .data-box { 
+        display: flex; 
+        flex-direction: column; 
+        align-items: flex-end; 
+    }
+
+    .label { 
+        font-size: 10px; 
+        color: var(--hrc-red); 
+        font-weight: bold; 
+    }
+
+    .val { 
+        font-size: 30px; 
+        font-weight: 900; 
+        line-height: 0.9; 
+    }
+
+    /* フッター：ボタン操作エリア */
+    footer { 
+        height: 45px; 
+        display: flex; 
+        gap: 4px; 
+        padding: 3px; 
+        background: #000; 
+        border-top: 1px solid #333; 
+        z-index: 100; 
+        position: fixed; 
+        bottom: 0; 
+        left: 0; 
+        right: 0; 
+        padding-bottom: env(safe-area-inset-bottom); 
+    }
+
+    button { 
+        flex: 1; 
+        background: #1a1a1a; 
+        color: #fff; 
+        border: 1px solid #444; 
+        border-radius: 6px; 
+        font-size: 10px; 
+        font-weight: bold; 
+        cursor: pointer; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        height: 100%; 
+        pointer-events: auto; 
+    }
+
+    #saveLogBtn { 
+        background: #155724; 
+        display: none; 
+    }
+
+    /* デモモード用アニメーション */
+    .demo-active { 
+        animation: demoBlink 1s infinite; 
+    }
+
+    @keyframes demoBlink { 
+        0% {background-color: var(--hrc-orange); color: #000;} 
+        50% {background-color: #885500; color: #000;} 
+        100% {background-color: var(--hrc-orange); color: #000;} 
+    }
+</style>
 </head>
 <body>
 
@@ -332,5 +446,6 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
