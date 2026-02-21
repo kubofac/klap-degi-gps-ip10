@@ -308,39 +308,42 @@ async function ble() {
 }
 
 function processLap(now, isAuto) {
-    // 1. ラップタイムの計算と記録
+    // 1. ラップタイムの計算（データに関わらず実行）
     const lapTime = now - lastLapTime;
     lastLapTime = now;
-    lapRecords.unshift(lapTime); // 履歴の先頭に追加
+    lapRecords.unshift(lapTime); // 履歴の先頭に保存
 
-    // 2. 重要：最新のログデータに「ラップの切れ目」フラグを付与
-    // これにより、GPX書き出し時にここでタグを分けることができる
-    if (logData.length > 0) {
+    // 2. ログデータへのフラグ付け（データが存在する場合のみ）
+    // GPSが受信できていなくても、ここでエラーにならずに次へ進めるようにします
+    if (logData && logData.length > 0) {
         logData[logData.length - 1].isLap = true;
     }
 
-    // 3. UIの表示更新
+    // 3. UI表示の更新
     const display1 = document.getElementById('display1');
     const lapDiv = document.getElementById('lap');
-    
-    // 画面中央にラップタイムをフリーズ表示（15秒間）
+
+    // ラップタイムをメイン画面に表示（15秒間維持）
     display1.innerText = formatTime(lapTime);
-    display1.style.color = "#FFD700"; // ラップ通過時はゴールドに
+    display1.style.color = "#FFD700"; // 通過時はゴールド
     
     setTimeout(() => {
         display1.style.color = "var(--hrc-white)";
     }, 15000);
 
-    // 履歴一覧を更新
+    // 履歴パネルの更新
     const bestTime = Math.min(...lapRecords);
-    lapDiv.innerHTML = lapRecords.map((t, i) => `
-        <div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
-            <span>L${lapRecords.length - i}</span>
-            <span>${formatTime(t)}</span>
-        </div>
-    `).join('');
+    lapDiv.innerHTML = lapRecords.map((t, i) => {
+        const lapNum = lapRecords.length - i;
+        return `
+            <div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
+                <span>L${lapNum}</span>
+                <span>${formatTime(t)}</span>
+            </div>
+        `;
+    }).join('');
 
-    // 音や振動でライダーに通知（任意）
+    // 通知（振動）
     if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
 }
 
@@ -523,6 +526,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
