@@ -133,63 +133,54 @@ document.getElementById('btnRecord').onclick = function() {
     }
 };
 
-document.getElementById('btnSave').onclick = () => {
+document.getElementById('btnSave').onclick = async () => {
     if (logData.length < 5) {
-        addLog("Too few points to save.");
+        addLog("データが少なすぎます");
         return;
     }
-    
-    addLog("Building GPX...");
-    
+
+    addLog("共有メニューを準備中...");
     let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n' +
               '<gpx version="1.1" creator="KLAP" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">\n' +
               '<trk><name>LOG</name><trkseg>\n';
-    
     for (let p of logData) {
         gpx += `<trkpt lat="${p.la}" lon="${p.lo}"><time>${p.t}</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>\n`;
     }
     gpx += '</trkseg></trk></gpx>';
 
-    try {
-        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-        const url = URL.createObjectURL(blob);
-        const fileName = `KLAP_${Math.floor(Date.now()/1000)}.gpx`;
+    const file = new File([gpx], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/gpx+xml' });
 
-        // --- 修正ポイント：画面上に直接ボタン/リンクを作る ---
-        // 既存の古いリンクがあれば消す
-        const oldLink = document.getElementById('temp-download-link');
-        if(oldLink) oldLink.remove();
-
-        // ログエリアの上に大きな「保存確定リンク」を表示
-        const link = document.createElement('a');
-        link.id = 'temp-download-link';
-        link.href = url;
-        link.download = fileName;
-        link.innerHTML = "【ここをタップして保存を完了する】";
-        
-        // スタイル設定（目立たせる）
-        link.style.display = "block";
-        link.style.background = "#ffcc00";
-        link.style.color = "#000";
-        link.style.padding = "15px";
-        link.style.margin = "10px 0";
-        link.style.textAlign = "center";
-        link.style.fontWeight = "bold";
-        link.style.borderRadius = "8px";
-        link.style.textDecoration = "none";
-
-        // ログエリアの前に挿入
-        const logEl = document.getElementById('log');
-        logEl.parentNode.insertBefore(link, logEl);
-        
-        addLog("TAP YELLOW BUTTON TO SAVE");
-
-    } catch (err) {
-        addLog("Process Error: " + err.message);
+    // iOS標準の共有シートを呼び出す (Web Share API)
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                files: [file],
+                title: 'KLAP GPX Log',
+            });
+            addLog("共有メニュー完了");
+        } catch (err) {
+            addLog("共有失敗: " + err.message);
+            // 失敗した場合は前回のテキストエリア方式を出す
+            showCopyArea(gpx);
+        }
+    } else {
+        addLog("共有機能未対応。コピー方式に切替。");
+        showCopyArea(gpx);
     }
 };
+
+// 予備のコピーエリア表示関数
+function showCopyArea(gpx) {
+    const old = document.getElementById('copy-box'); if(old) old.remove();
+    const div = document.createElement('div');
+    div.id = 'copy-box';
+    div.style = "background:#222; padding:10px; border:2px solid #ffcc00; margin-top:10px;";
+    div.innerHTML = `<textarea id="ta" style="width:100%;height:100px;">${gpx}</textarea><button onclick="document.getElementById('ta').select();document.execCommand('copy');alert('コピーしました')">全コピー</button>`;
+    document.getElementById('log').parentNode.insertBefore(div, document.getElementById('log'));
+}
 </script>
 </body>
 </html>
+
 
 
