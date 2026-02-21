@@ -162,20 +162,26 @@
     }
 
     /* フッター：ボタン操作エリア */
-    footer { 
-        height: 45px; 
-        display: flex; 
-        gap: 4px; 
-        padding: 3px; 
-        background: #000; 
-        border-top: 1px solid #333; 
-        z-index: 100; 
-        position: fixed; 
-        bottom: 0; 
-        left: 0; 
-        right: 0; 
-        padding-bottom: env(safe-area-inset-bottom); 
-    }
+   /* フッター：ボタン操作エリア */
+footer { 
+    height: 45px; 
+    display: flex; 
+    gap: 4px; 
+    padding: 3px; 
+    background: #000; 
+    border-top: 1px solid #333; 
+    
+    /* --- ここが重要：重なり順を最前面にする --- */
+    z-index: 10000; 
+    position: fixed; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    /* -------------------------------------- */
+    
+    padding-bottom: env(safe-area-inset-bottom); 
+    pointer-events: auto; /* 確実にクリックを通す */
+}
 
     button { 
         flex: 1; 
@@ -526,6 +532,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
