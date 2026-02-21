@@ -139,7 +139,7 @@ document.getElementById('btnSave').onclick = () => {
         return;
     }
     
-    addLog("Generating File...");
+    addLog("Building GPX...");
     
     let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n' +
               '<gpx version="1.1" creator="KLAP" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">\n' +
@@ -148,26 +148,35 @@ document.getElementById('btnSave').onclick = () => {
     for (let p of logData) {
         gpx += `<trkpt lat="${p.la}" lon="${p.lo}"><time>${p.t}</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>\n`;
     }
-
     gpx += '</trkseg></trk></gpx>';
-    
+
+    // --- 保存手法の変更 ---
     try {
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `KLAP_${Math.floor(Date.now()/1000)}.gpx`;
+        const reader = new FileReader();
         
-        // iOS対策：bodyに追加して即クリック
-        document.body.appendChild(a);
-        a.click();
-        
-        // クリーンアップ
-        setTimeout(() => {
+        reader.onloadend = function() {
+            // A: 通常のダウンロード試行
+            const a = document.createElement('a');
+            a.href = reader.result;
+            a.download = `KLAP_${Date.now()}.gpx`;
+            document.body.appendChild(a);
+            a.click();
             document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            addLog("Download Triggered");
-        }, 100);
+            
+            addLog("Download Triggered!");
+            
+            // B: iOSでダウンロードが失敗する場合の保険
+            // 数秒後に別画面でテキストとして表示させる（これをコピペして保存も可能）
+            setTimeout(() => {
+                if(confirm("ファイルが見つかりませんか？別ウィンドウでデータを開きますか？")) {
+                    const newWin = window.open();
+                    newWin.document.write('<pre>' + gpx.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>');
+                }
+            }, 3000);
+        };
+        reader.readAsDataURL(blob);
+
     } catch (err) {
         addLog("Save Error: " + err.message);
     }
@@ -175,3 +184,4 @@ document.getElementById('btnSave').onclick = () => {
 </script>
 </body>
 </html>
+
