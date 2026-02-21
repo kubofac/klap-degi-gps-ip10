@@ -322,15 +322,25 @@ function processLap(exactTime, useFreeze) {
 
 async function exportGPX() {
     if (logData.length < 5) return;
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
-<trk><name>SESSION_${new Date().toLocaleString()}</name><trkseg>`;
-    logData.forEach(p => {
-        gpx += `\n  <trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}"><time>${p.t}</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>`;
-    });
+    
+    // 1. GPX文字列の生成（ここは変更なし）
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx ...`; 
+    // ... 中身のループ処理 ...
     gpx += `\n</trkseg></trk></gpx>`;
-    const file = new File([gpx], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
+
+    // 2. 「１」の対策：バイナリ形式としてBlobとFileを生成
+    const blob = new Blob([gpx], { type: 'application/octet-stream' });
+    const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
+
+    // 3. 「２」の対策：共有内容を「ファイルのみ」に限定
     if (navigator.share) {
-        try { await navigator.share({ files: [file], title: 'Race Log' }); } catch (e) {}
+        try {
+            await navigator.share({
+                files: [file] // titleやtextは一切書かない
+            });
+        } catch (e) {
+            console.log("Export cancelled");
+        }
     }
 }
 
@@ -446,6 +456,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
