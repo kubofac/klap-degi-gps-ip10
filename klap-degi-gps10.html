@@ -3,25 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE FINAL CHECK</title>
+    <title>LAP TIMER FINAL TEST</title>
     <style>
         body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-        .log-box { border: 1px solid #444; padding: 10px; height: 120px; overflow-y: scroll; background: #111; margin-bottom: 20px; font-size: 12px; }
-        .stat-item { margin-bottom: 10px; border-bottom: 1px solid #222; }
-        .val { color: #fff; font-size: 28px; font-weight: bold; }
-        button { width: 100%; height: 70px; background: #0088ff; color: white; border: none; font-size: 20px; border-radius: 12px; }
+        .log-box { border: 1px solid #444; padding: 10px; height: 80px; overflow-y: scroll; background: #111; margin-bottom: 15px; font-size: 11px; }
+        .stat-item { margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .label { font-size: 12px; color: #0f0; display: block; text-transform: uppercase; }
+        .val { color: #fff; font-size: 26px; font-weight: bold; }
+        .unit { font-size: 14px; color: #aaa; margin-left: 5px; }
+        button { width: 100%; height: 60px; background: #0088ff; color: white; border: none; font-size: 18px; border-radius: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h3>BLE DIAGNOSIS (iOS FIX)</h3>
+    <h3 style="color:#0088ff">LAP TIMER DIAGNOSIS</h3>
     <div class="log-box" id="log">--- READY ---<br></div>
 
-    <div class="stat-item">RECV COUNT: <span id="count" class="val">0</span></div>
-    <div class="stat-item">LAST DATA: <span id="rawdata" class="val" style="color:#ff0">WAITING...</span></div>
-    <div class="stat-item">Hz: <span id="hz" class="val">0</span> / TEMP: <span id="temp" class="val">0</span></div>
+    <div class="stat-item">
+        <span class="label">Latitude (緯度)</span>
+        <span id="lat" class="val">0.000000</span>
+    </div>
+    <div class="stat-item">
+        <span class="label">Longitude (経度)</span>
+        <span id="lng" class="val">0.000000</span>
+    </div>
+    <div style="display: flex; justify-content: space-between;">
+        <div class="stat-item" style="width: 48%;">
+            <span class="label">Speed</span>
+            <span id="speed" class="val">0</span><span class="unit">km/h</span>
+        </div>
+        <div class="stat-item" style="width: 48%;">
+            <span class="label">Temp</span>
+            <span id="temp" class="val">0</span><span class="unit">℃</span>
+        </div>
+    </div>
+    
+    <div style="font-size: 10px; color: #444; margin-top: 10px;">
+        RECV: <span id="count">0</span> | RAW: <span id="rawdata">NONE</span>
+    </div>
 
-    <button id="btn">CONNECT DEVICE</button>
+    <button id="btn">CONNECT UNIT</button>
 
 <script>
 const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
@@ -34,56 +55,55 @@ function addLog(msg) {
     log.scrollTop = log.scrollHeight;
 }
 
-// iPhoneでイベントを拾うための「最強の関数」
 function handleData(event) {
     recvCount++;
     document.getElementById('count').textContent = recvCount;
     
-    // iOS/Bluefyで最も安全なデータの取り出し方
     const buffer = event.target.value.buffer;
     const bytes = new Uint8Array(buffer);
-    
-    // 強制的に画面更新
-    const rawStr = "[" + bytes.join(", ") + "]";
-    document.getElementById('rawdata').textContent = rawStr;
+    document.getElementById('rawdata').textContent = "[" + bytes.join(",") + "]";
 
-    if (bytes.length >= 3) {
-        document.getElementById('hz').textContent = bytes[0] | (bytes[1] << 8);
-        document.getElementById('temp').textContent = bytes[2];
+    // 11バイト（4+4+2+1）届いているか確認
+    if (bytes.length >= 11) {
+        // 4バイト整数復元 (Little Endian)
+        const latInt = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
+        const lngInt = (bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24));
+        // 2バイト速度復元
+        const speedInt = (bytes[8] | (bytes[9] << 8));
+        // 1バイト温度
+        const tempVal = bytes[10];
+
+        // 100万で割って画面に表示
+        document.getElementById('lat').textContent = (latInt / 1000000).toFixed(6);
+        document.getElementById('lng').textContent = (lngInt / 1000000).toFixed(6);
+        document.getElementById('speed').textContent = speedInt;
+        document.getElementById('temp').textContent = tempVal;
     }
 }
 
 document.getElementById('btn').onclick = async () => {
     try {
-        addLog("Requesting...");
+        addLog("Scanning for Device...");
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [S_UUID] }]
         });
 
-        addLog("Connecting...");
+        addLog("Connecting to GATT...");
         const server = await device.gatt.connect();
         
-        addLog("Stabilizing (2s)...");
+        addLog("Stabilizing...");
         await new Promise(r => setTimeout(r, 2000));
 
-        addLog("Getting Service...");
         const service = await server.getPrimaryService(S_UUID);
-        
-        addLog("Getting Characteristic...");
         const char = await service.getCharacteristic(C_UUID);
 
-        // --- iOS/Bluefy対策：addEventListener を使い、かつ start よりも先に登録 ---
-        addLog("Setting up Listener...");
+        addLog("Ready to receive.");
         char.addEventListener('characteristicvaluechanged', handleData);
-
-        addLog("Starting Notifications...");
         await char.startNotifications();
         
         addLog("SUCCESS: Monitoring active.");
-
     } catch (e) {
         addLog("ERROR: " + e.message);
-        alert(e.message);
     }
 };
 </script>
