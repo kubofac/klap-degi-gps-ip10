@@ -1,110 +1,203 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LAP TIMER FINAL TEST</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>KLAP DEGI ULTIMATE - BLE 10Hz</title>
     <style>
-        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-        .log-box { border: 1px solid #444; padding: 10px; height: 80px; overflow-y: scroll; background: #111; margin-bottom: 15px; font-size: 11px; }
-        .stat-item { margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 5px; }
-        .label { font-size: 12px; color: #0f0; display: block; text-transform: uppercase; }
-        .val { color: #fff; font-size: 26px; font-weight: bold; }
-        .unit { font-size: 14px; color: #aaa; margin-left: 5px; }
-        button { width: 100%; height: 60px; background: #0088ff; color: white; border: none; font-size: 18px; border-radius: 12px; font-weight: bold; }
+        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
+        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
+        #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
+
+        .main-ui-container {
+            position: absolute; right: 15px; top: 90px; bottom: 50px;
+            display: flex; flex-direction: row; align-items: flex-start; gap: 25px; z-index: 20; pointer-events: none;
+        }
+
+        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; height: 100%; justify-content: center; }
+        #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; margin-bottom: 15px; }
+        #display1 { font-size: 17vh; letter-spacing: 1px; transform: scaleX(0.95); transform-origin: right; font-weight: 900; line-height: 0.8; color: var(--hrc-white); text-shadow: 4px 4px 15px #000; white-space: nowrap; display: inline-block; }
+        #display { font-size: 3.5vh; color: #bbb; text-shadow: 1px 1px 6px #000; margin-top: 5px; }
+
+        #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; padding-top: 30px; }
+        #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
+        .lap-row { display: flex; justify-content: flex-end; gap: 15px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px; font-weight: 900; }
+        .best-lap { color: var(--hrc-red); }
+
+        .data-panel { display: flex; flex-direction: column; gap: 12px; width: 90px; padding-top: 30px; }
+        .data-box { display: flex; flex-direction: column; align-items: flex-end; }
+        .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
+        .val { font-size: 32px; font-weight: 900; line-height: 0.9; }
+
+        footer { height: 45px; display: flex; gap: 4px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
+        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
+        #saveLogBtn { background: #155724; display: none; }
     </style>
 </head>
 <body>
 
-    <h3 style="color:#0088ff">LAP TIMER DIAGNOSIS</h3>
-    <div class="log-box" id="log">--- READY ---<br></div>
-
-    <div class="stat-item">
-        <span class="label">Latitude (緯度)</span>
-        <span id="lat" class="val">0.000000</span>
-    </div>
-    <div class="stat-item">
-        <span class="label">Longitude (経度)</span>
-        <span id="lng" class="val">0.000000</span>
-    </div>
-    <div style="display: flex; justify-content: space-between;">
-        <div class="stat-item" style="width: 48%;">
-            <span class="label">Speed</span>
-            <span id="speed" class="val">0</span><span class="unit">km/h</span>
+<div id="dashboard">
+    <canvas id="canvas"></canvas>
+    <div class="main-ui-container">
+        <div id="info-overlay">
+            <div id="rpm_val">0</div>
+            <div id="display1">00:00.000</div>
+            <div id="display">TOTAL 00:00.000</div>
         </div>
-        <div class="stat-item" style="width: 48%;">
-            <span class="label">Temp</span>
-            <span id="temp" class="val">0</span><span class="unit">℃</span>
+        <div id="lap-panel"><div id="lap"></div></div>
+        <div class="data-panel">
+            <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
+            <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color:var(--hrc-orange);">0</div></div>
+            <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
         </div>
     </div>
-    
-    <div style="font-size: 10px; color: #444; margin-top: 10px;">
-        RECV: <span id="count">0</span> | RAW: <span id="rawdata">NONE</span>
-    </div>
-
-    <button id="btn">CONNECT UNIT</button>
+    <footer>
+        <button id="btConnect">BLE CONNECT</button>
+        <button id="startBtn">TIMER</button>
+        <button id="lapBtn">LAP/RESET</button>
+        <button id="saveLogBtn">LOG SAVE</button>
+        <button id="reloadBtn">RELOAD</button>
+    </footer>
+</div>
 
 <script>
-const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914f";
-const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb63f";
-let recvCount = 0;
+'use strict';
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const CHARACTERISTIC_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 
-function addLog(msg) {
-    const log = document.getElementById('log');
-    log.innerHTML += `> ${msg}<br>`;
-    log.scrollTop = log.scrollHeight;
+let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, pulseCount = 1;
+let lastPos = null, lastLapTime = 0, lastBleDataTime = 0;
+let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
+let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], trackLogs = [], currentLapLog = [];
+let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0, previousSideOfLine = null;
+const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+
+function getSideOfLine(pLat, pLon, l1Lat, l1Lon, l2Lat, l2Lon) {
+    return (l2Lon - l1Lon) * (pLat - l1Lat) - (l2Lat - l1Lat) * (pLon - l1Lon);
 }
 
-function handleData(event) {
-    recvCount++;
-    document.getElementById('count').textContent = recvCount;
-    
-    const buffer = event.target.value.buffer;
-    const bytes = new Uint8Array(buffer);
-    document.getElementById('rawdata').textContent = "[" + bytes.join(",") + "]";
-
-    // 11バイト（4+4+2+1）届いているか確認
-    if (bytes.length >= 11) {
-        // 4バイト整数復元 (Little Endian)
-        const latInt = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
-        const lngInt = (bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24));
-        // 2バイト速度復元
-        const speedInt = (bytes[8] | (bytes[9] << 8));
-        // 1バイト温度
-        const tempVal = bytes[10];
-
-        // 100万で割って画面に表示
-        document.getElementById('lat').textContent = (latInt / 1000000).toFixed(6);
-        document.getElementById('lng').textContent = (lngInt / 1000000).toFixed(6);
-        document.getElementById('speed').textContent = speedInt;
-        document.getElementById('temp').textContent = tempVal;
-    }
-}
-
-document.getElementById('btn').onclick = async () => {
+async function ble() {
     try {
-        addLog("Scanning for Device...");
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [S_UUID] }]
-        });
-
-        addLog("Connecting to GATT...");
+        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
-        
-        addLog("Stabilizing...");
-        await new Promise(r => setTimeout(r, 2000));
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const char = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        const service = await server.getPrimaryService(S_UUID);
-        const char = await service.getCharacteristic(C_UUID);
+        char.addEventListener('characteristicvaluechanged', (e) => {
+            lastBleDataTime = Date.now();
+            const d = e.target.value;
+            if (d.byteLength >= 13) {
+                // データの復元
+                const latInt = d.getInt32(0, true);
+                const lngInt = d.getInt32(4, true);
+                const lat = latInt / 1000000;
+                const lon = lngInt / 1000000;
+                currentSpeedKmh = d.getUint16(8, true);
+                currentTemp = d.getUint8(10);
+                const hz = d.getUint16(11, true);
+                currentRPM = (hz * 60) / pulseCount;
 
-        addLog("Ready to receive.");
-        char.addEventListener('characteristicvaluechanged', handleData);
+                // UI表示
+                document.getElementById('speed_val').textContent = currentSpeedKmh;
+                document.getElementById('temp_val').textContent = currentTemp;
+                if (swState === 1 && currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
+
+                // ラップ判定ロジック
+                const currentPos = { lat, lon, time: Date.now(), speed: currentSpeedKmh, temp: currentTemp, rpm: currentRPM };
+                if (swState === 1) {
+                    currentLapLog.push(currentPos);
+                    if (LAP_LINE_P1.lat !== 0) {
+                        const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
+                        if (lastPos && previousSideOfLine !== null && ((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0))) {
+                            if (currentPos.time - lastLapTime >= 15000) processLap(currentPos.time, true);
+                        }
+                        previousSideOfLine = currentSide;
+                    }
+                }
+                lastPos = currentPos;
+            }
+        });
         await char.startNotifications();
-        
-        addLog("SUCCESS: Monitoring active.");
-    } catch (e) {
-        addLog("ERROR: " + e.message);
+    } catch (e) { alert(e.message); }
+}
+
+function processLap(exactTime, useFreeze) {
+    const lapTime = exactTime - (lapStartTime || startTime);
+    lapRecords.unshift(lapTime);
+    trackLogs.push([...currentLapLog]);
+    currentLapLog = [];
+    lapStartTime = exactTime; lastLapTime = exactTime;
+    const d = document.getElementById('lap'); d.innerHTML = "";
+    const best = Math.min(...lapRecords);
+    lapRecords.forEach((t, i) => {
+        const r = document.createElement('div'); r.className = `lap-row ${t === best ? 'best-lap' : ''}`;
+        r.innerHTML = `<span>L${lapRecords.length-i}</span><span>${timeFormat(t)}</span>`; d.appendChild(r);
+    });
+    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTime); freezeStartTime = Date.now(); }
+}
+
+function timeFormat(ms) {
+    let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${mss.toString().padStart(3,'0')}`;
+}
+
+function tick() {
+    if (swState !== 1) return;
+    const now = Date.now();
+    document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
+    if (isFrozen) {
+        document.getElementById('display1').textContent = freezeDisplayTime;
+        if (now - freezeStartTime > 15000) isFrozen = false;
+    } else { 
+        document.getElementById('display1').textContent = timeFormat(now - lapStartTime); 
     }
+    document.getElementById('max_speed_val').textContent = maxSpeed;
+    requestAnimationFrame(tick);
+}
+
+function drawTacho(rpm) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const w = canvas.width, h = canvas.height, segments = 75, active = Math.floor((rpm / 14000) * segments);
+    const sX = 20, hY = 80, bY = h - 20, rad = bY - hY, curveEnd = 30;
+    for (let i = 0; i <= segments; i++) {
+        let x, y, ang, prog;
+        if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad; }
+        else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI; }
+        if (i % 10 === 0 || i === segments) {
+            ctx.save(); ctx.fillStyle = i < active ? "#fff" : "#444"; ctx.font = "italic bold 20px Arial"; ctx.textAlign = "center";
+            ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); ctx.restore();
+        }
+        if (i < segments) {
+            ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222";
+            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore();
+        }
+    }
+    document.getElementById('rpm_val').textContent = Math.floor(rpm);
+}
+
+document.getElementById('btConnect').onclick = ble;
+document.getElementById('startBtn').onclick = () => {
+    if(swState !== 1) { 
+        swState = 1; startTime = Date.now(); lapStartTime = startTime; maxSpeed = 0; tick(); 
+    } else { 
+        swState = 2; document.getElementById('saveLogBtn').style.display = 'flex';
+    }
+};
+document.getElementById('lapBtn').onclick = () => {
+    if(swState === 1) processLap(Date.now(), false);
+    else { swState = 0; lapRecords = []; document.getElementById('lap').innerHTML = ""; }
+};
+document.getElementById('reloadBtn').onclick = () => location.reload();
+
+window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
+window.onload = () => { 
+    window.dispatchEvent(new Event('resize')); 
+    pulseCount = parseInt(localStorage.getItem('pl1')) || 1;
+    LAP_LINE_P1 = { lat: parseFloat(localStorage.getItem('startLineP1Lat')) || 0, lon: parseFloat(localStorage.getItem('startLineP1Lon')) || 0 };
+    LAP_LINE_P2 = { lat: parseFloat(localStorage.getItem('startLineP2Lat')) || 0, lon: parseFloat(localStorage.getItem('startLineP2Lon')) || 0 };
+    (function r(){ drawTacho(currentRPM); requestAnimationFrame(r); })(); 
 };
 </script>
 </body>
