@@ -150,38 +150,46 @@ document.getElementById('btnSave').onclick = () => {
     }
     gpx += '</trkseg></trk></gpx>';
 
-    // --- 保存手法の変更 ---
     try {
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-        const reader = new FileReader();
+        const url = URL.createObjectURL(blob);
+        const fileName = `KLAP_${Math.floor(Date.now()/1000)}.gpx`;
+
+        // --- 修正ポイント：画面上に直接ボタン/リンクを作る ---
+        // 既存の古いリンクがあれば消す
+        const oldLink = document.getElementById('temp-download-link');
+        if(oldLink) oldLink.remove();
+
+        // ログエリアの上に大きな「保存確定リンク」を表示
+        const link = document.createElement('a');
+        link.id = 'temp-download-link';
+        link.href = url;
+        link.download = fileName;
+        link.innerHTML = "【ここをタップして保存を完了する】";
         
-        reader.onloadend = function() {
-            // A: 通常のダウンロード試行
-            const a = document.createElement('a');
-            a.href = reader.result;
-            a.download = `KLAP_${Date.now()}.gpx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            addLog("Download Triggered!");
-            
-            // B: iOSでダウンロードが失敗する場合の保険
-            // 数秒後に別画面でテキストとして表示させる（これをコピペして保存も可能）
-            setTimeout(() => {
-                if(confirm("ファイルが見つかりませんか？別ウィンドウでデータを開きますか？")) {
-                    const newWin = window.open();
-                    newWin.document.write('<pre>' + gpx.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>');
-                }
-            }, 3000);
-        };
-        reader.readAsDataURL(blob);
+        // スタイル設定（目立たせる）
+        link.style.display = "block";
+        link.style.background = "#ffcc00";
+        link.style.color = "#000";
+        link.style.padding = "15px";
+        link.style.margin = "10px 0";
+        link.style.textAlign = "center";
+        link.style.fontWeight = "bold";
+        link.style.borderRadius = "8px";
+        link.style.textDecoration = "none";
+
+        // ログエリアの前に挿入
+        const logEl = document.getElementById('log');
+        logEl.parentNode.insertBefore(link, logEl);
+        
+        addLog("TAP YELLOW BUTTON TO SAVE");
 
     } catch (err) {
-        addLog("Save Error: " + err.message);
+        addLog("Process Error: " + err.message);
     }
 };
 </script>
 </body>
 </html>
+
 
