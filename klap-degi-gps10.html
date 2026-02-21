@@ -57,13 +57,33 @@ document.getElementById('btn').onclick = async () => {
         const char = await service.getCharacteristic(C_UUID);
 
         addLog("5. Setup Callback...");
-        char.oncharacteristicvaluechanged = (event) => {
+     char.oncharacteristicvaluechanged = (event) => {
             recvCount++;
             document.getElementById('count').textContent = recvCount;
             document.getElementById('step').textContent = "RECEIVING";
-            const d = event.target.value;
-            const h = d.getUint8(0) | (d.getUint8(1) << 8);
-            document.getElementById('hz').textContent = h;
+            
+            const d = event.target.value; // DataView
+            
+            // データが3バイトあるか確認
+            if (d.byteLength >= 3) {
+                // 1バイトずつ直接変数に入れる（ズレを防ぐ）
+                const byte0 = d.getUint8(0); // Hzの低い方
+                const byte1 = d.getUint8(1); // Hzの高い方
+                const byte2 = d.getUint8(2); // 温度
+
+                // Hzを復元 (byte1を8ビット左にずらしてbyte0と合体)
+                const h = byte0 | (byte1 << 8);
+                const t = byte2;
+
+                // 画面に表示
+                document.getElementById('hz').textContent = h;
+                document.getElementById('temp').textContent = t;
+                
+                // 生データも確認用に表示（[105, 0, 42] のように見えるはず）
+                document.getElementById('rawdata').textContent = `[${byte0}, ${byte1}, ${byte2}]`;
+            } else {
+                addLog("Received short packet: " + d.byteLength + " bytes");
+            }
         };
 
         addLog("6. Start Notifications...");
@@ -79,4 +99,5 @@ document.getElementById('btn').onclick = async () => {
 </script>
 </body>
 </html>
+
 
