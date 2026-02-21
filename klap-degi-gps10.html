@@ -40,48 +40,43 @@ function addLog(msg, isError = false) {
 document.getElementById('btn').onclick = async () => {
     try {
         addLog("1. Requesting Device...");
-        document.getElementById('step').textContent = "REQUESTING";
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [S_UUID] }]
         });
 
-        addLog(`Found: ${device.name}`);
-        document.getElementById('step').textContent = "CONNECTING";
         const server = await device.gatt.connect();
+        addLog("2. Connected. Waiting 3 seconds for iOS Cache...");
+        
+        // iOSはこの待ち時間が極めて重要です
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-        addLog("2. Getting Service...");
+        addLog("3. Getting Service...");
         const service = await server.getPrimaryService(S_UUID);
-
-        addLog("3. Getting Characteristic...");
+        
+        addLog("4. Getting Characteristic...");
         const char = await service.getCharacteristic(C_UUID);
 
-        addLog("4. Starting Notifications...");
-        document.getElementById('step').textContent = "STARTING NOTIFY";
-        
+        addLog("5. Setup Callback...");
         char.oncharacteristicvaluechanged = (event) => {
             recvCount++;
-            const d = event.target.value;
             document.getElementById('count').textContent = recvCount;
             document.getElementById('step').textContent = "RECEIVING";
-            
-            if (d.byteLength >= 3) {
-                const h = d.getUint8(0) | (d.getUint8(1) << 8);
-                const t = d.getUint8(2);
-                document.getElementById('hz').textContent = h;
-                document.getElementById('temp').textContent = t;
-                document.getElementById('rawdata').textContent = `[${d.getUint8(0)},${d.getUint8(1)},${d.getUint8(2)}]`;
-            }
+            const d = event.target.value;
+            const h = d.getUint8(0) | (d.getUint8(1) << 8);
+            document.getElementById('hz').textContent = h;
         };
 
+        addLog("6. Start Notifications...");
+        // これでiPhoneに「Indicate/Notifyを受け取る」と強制的に宣言させます
         await char.startNotifications();
-        addLog("SUCCESS: Waiting for data...");
-        document.getElementById('step').textContent = "WAITING DATA";
+        
+        addLog("SUCCESS: Data should arrive now.");
 
     } catch (e) {
         addLog(`ERROR: ${e.message}`, true);
-        document.getElementById('step').textContent = "FAILED";
     }
 };
 </script>
 </body>
 </html>
+
