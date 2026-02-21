@@ -276,23 +276,26 @@ function processLap(now, isAuto) {
         logData[logData.length - 1].isLap = true;
     }
 
-    // --- 表示の固定処理 ---
-    isFrozen = true; 
-    freezeDisplayTime = timeFormat(lapTime); // ラップタイムを固定文字として保存
-    freezeStartTime = now; 
-
     const display1 = document.getElementById('display1');
-    display1.innerText = freezeDisplayTime; 
-    
-    // ★色変更（#FFD700）の記述を削除し、白を維持
-    display1.style.color = "var(--hrc-white)"; 
-    
-    setTimeout(() => {
-        // 15秒経ったらフリーズを解除して計測中のタイムに戻す
-        isFrozen = false; 
-    }, 15000);
-    // -------------------------
 
+    if (isAuto) {
+        // --- 自動ラップの場合のみ15秒固定表示を行う ---
+        isFrozen = true;
+        freezeDisplayTime = timeFormat(lapTime);
+        freezeStartTime = now;
+        display1.innerText = freezeDisplayTime;
+
+        setTimeout(() => {
+            isFrozen = false;
+        }, 15000);
+    } else {
+        // --- 手動ラップの場合は固定せず、すぐに次の周回の表示へ ---
+        isFrozen = false;
+        // 即座に 00:00.000 からのカウントアップに見えるよう、表示を更新
+        display1.innerText = timeFormat(0);
+    }
+
+    // ラップ履歴（横のリスト）の更新
     const lapDiv = document.getElementById('lap');
     const bestTime = Math.min(...lapRecords);
     lapDiv.innerHTML = lapRecords.map((t, i) => {
@@ -300,7 +303,7 @@ function processLap(now, isAuto) {
         return `
             <div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
                 <span>L${lapNum}</span>
-                <span>${timeFormat(t)}</span> 
+                <span>${timeFormat(t)}</span>
             </div>
         `;
     }).join('');
@@ -428,3 +431,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
