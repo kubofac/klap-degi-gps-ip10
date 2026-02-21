@@ -1,129 +1,99 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS & BLE DIAGNOSTIC</title>
+    <title>GPS DIAG V3</title>
     <style>
-        body { background: #000; color: #fff; font-family: 'Courier New', monospace; padding: 15px; margin: 0; }
-        .container { display: flex; flex-direction: column; gap: 10px; }
-        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; }
-        .label { color: #888; font-size: 12px; margin-bottom: 5px; }
-        .val { font-size: 24px; font-weight: bold; color: #00FF00; }
-        .unit { font-size: 14px; color: #666; margin-left: 5px; }
-        
-        button { width: 100%; height: 60px; background: #004098; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-        
-        /* 診断インジケーター */
-        .diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .diag-box { background: #1a1a1a; padding: 10px; border-radius: 5px; text-align: center; }
-        .recv-pulse { display: inline-block; width: 10px; height: 10px; background: #555; border-radius: 50%; margin-right: 5px; }
-        .active { background: #00FF00; box-shadow: 0 0 10px #00FF00; }
-        
-        #log { font-size: 11px; color: #666; height: 100px; overflow-y: scroll; background: #050505; padding: 5px; margin-top: 10px; border: 1px solid #222; }
+        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
+        .log-box { border: 1px solid #444; padding: 10px; height: 100px; overflow-y: scroll; background: #111; margin-bottom: 15px; font-size: 11px; color: #aaa; }
+        .stat-item { margin-bottom: 15px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .label { font-size: 12px; color: #0088ff; display: block; }
+        .val { color: #fff; font-size: 28px; font-weight: bold; }
+        button { width: 100%; height: 70px; background: #0088ff; color: white; border: none; font-size: 20px; border-radius: 12px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <button id="btn">BLE CONNECT</button>
+    <h3 style="color:#0088ff">KLAP GPS DIAGNOSIS</h3>
+    <div class="log-box" id="log">READY...</div>
 
-    <div class="diag-grid">
-        <div class="diag-box">
-            <div class="label"><span id="pulse" class="recv-pulse"></span>RECV COUNT</div>
-            <div id="count" class="val">0</div>
-        </div>
-        <div class="diag-box">
-            <div class="label">STATUS</div>
-            <div id="status" style="color: #FFA500; font-size: 14px;">DISCONNECTED</div>
-        </div>
+    <div class="stat-item">
+        <span class="label">COORDINATES</span>
+        <span id="pos" class="val">WAITING FIX...</span>
     </div>
 
-    <div class="card">
-        <div class="label">LOCATION (FROM GPS)</div>
-        <div id="coords" class="val" style="font-size: 20px;">WAITING FOR FIX...</div>
-    </div>
-
-    <div class="diag-grid">
-        <div class="card">
-            <div class="label">SPEED</div>
-            <div><span id="speed" class="val">0</span><span class="unit">km/h</span></div>
+    <div style="display: flex; justify-content: space-between;">
+        <div class="stat-item" style="width: 45%;">
+            <span class="label">SPEED</span>
+            <span id="speed" class="val">0</span> km/h
         </div>
-        <div class="card">
-            <div class="label">WATER TEMP</div>
-            <div><span id="temp" class="val">0</span><span class="unit">℃</span></div>
+        <div class="stat-item" style="width: 45%;">
+            <span class="label">RPM</span>
+            <span id="rpm" class="val">0</span>
         </div>
     </div>
 
-    <div class="card">
-        <div class="label">ENGINE SPEED (DUMMY)</div>
-        <div><span id="rpm" class="val" style="color:#FFA500;">0</span><span class="unit">RPM</span></div>
-        <div class="label" style="margin-top:5px;">Frequency: <span id="hz">0</span> Hz</div>
+    <div class="stat-item">
+        <span class="label">TEMP</span>
+        <span id="temp" class="val">0</span> ℃
+    </div>
+    
+    <div style="font-size: 11px; color: #444;">
+        RECV: <span id="count">0</span> | BYTES: <span id="len">0</span>
     </div>
 
-    <div id="log">Logs initialized...</div>
-</div>
+    <button id="btn">CONNECT UNIT</button>
 
 <script>
+// ★ここを末尾 "b" と "0" に修正しました
 const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let recvCount = 0;
 
-function addLog(m) {
-    const l = document.getElementById('log');
-    l.innerHTML = "[" + new Date().toLocaleTimeString() + "] " + m + "<br>" + l.innerHTML;
+function addLog(msg) {
+    const log = document.getElementById('log');
+    log.innerHTML += `> ${msg}<br>`;
+    log.scrollTop = log.scrollHeight;
+}
+
+function handleData(event) {
+    const d = event.target.value;
+    recvCount++;
+    document.getElementById('count').textContent = recvCount;
+    document.getElementById('len').textContent = d.byteLength;
+
+    if (d.byteLength >= 13) {
+        // DataViewを使ってスマートに解析
+        const lat = d.getInt32(0, true) / 1000000;
+        const lng = d.getInt32(4, true) / 1000000;
+        const speed = d.getUint16(8, true);
+        const temp = d.getUint8(10);
+        const hz = d.getUint16(11, true);
+
+        if(lat !== 0) {
+            document.getElementById('pos').textContent = lat.toFixed(6) + ", " + lng.toFixed(6);
+        }
+        document.getElementById('speed').textContent = speed;
+        document.getElementById('temp').textContent = temp;
+        document.getElementById('rpm').textContent = hz * 60;
+    }
 }
 
 document.getElementById('btn').onclick = async () => {
     try {
+        addLog("Scanning...");
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [S_UUID] }] });
-        addLog("Device selected: " + device.name);
-        
+        addLog("Connecting...");
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(S_UUID);
         const char = await service.getCharacteristic(C_UUID);
 
-        document.getElementById('status').textContent = "CONNECTED";
-        document.getElementById('status').style.color = "#00FF00";
-        addLog("Connected and subscribing...");
-
-        char.addEventListener('characteristicvaluechanged', (e) => {
-            const d = e.target.value;
-            recvCount++;
-            
-            // 受信パルス表示
-            const pulse = document.getElementById('pulse');
-            pulse.classList.add('active');
-            setTimeout(() => pulse.classList.remove('active'), 50);
-
-            document.getElementById('count').textContent = recvCount;
-
-            if (d.byteLength >= 13) {
-                // Little Endianで解析
-                const latInt = d.getInt32(0, true);
-                const lngInt = d.getInt32(4, true);
-                const speed = d.getUint16(8, true);
-                const temp = d.getUint8(10);
-                const hz = d.getUint16(11, true);
-
-                // UI反映
-                if (latInt === 0) {
-                    document.getElementById('coords').innerHTML = '<span style="color:#f00;">GPS SEARCHING...</span>';
-                } else {
-                    document.getElementById('coords').textContent = (latInt/1000000).toFixed(6) + ", " + (lngInt/1000000).toFixed(6);
-                }
-                
-                document.getElementById('speed').textContent = speed;
-                document.getElementById('temp').textContent = temp;
-                document.getElementById('hz').textContent = hz;
-                document.getElementById('rpm').textContent = hz * 60;
-            }
-        });
-
+        char.addEventListener('characteristicvaluechanged', handleData);
         await char.startNotifications();
-        addLog("Notifications started.");
+        addLog("SUCCESS: Connected!");
     } catch (e) {
-        addLog("Error: " + e.message);
+        addLog("ERR: " + e.message);
     }
 };
 </script>
