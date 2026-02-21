@@ -34,70 +34,54 @@ function addLog(msg, isError = false) {
     const log = document.getElementById('log');
     log.innerHTML += `<span class="${isError?'error':''}">> ${msg}</span><br>`;
     log.scrollTop = log.scrollHeight;
-    console.log(msg);
 }
 
 document.getElementById('btn').onclick = async () => {
     try {
-        addLog("1. Requesting Device...");
+        addLog("1. Requesting...");
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [S_UUID] }]
         });
-
         const server = await device.gatt.connect();
-        addLog("2. Connected. Waiting 3 seconds for iOS Cache...");
-        
-        // iOSはこの待ち時間が極めて重要です
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        addLog("2. Connected. Waiting 3s...");
+        await new Promise(r => setTimeout(r, 3000));
 
-        addLog("3. Getting Service...");
         const service = await server.getPrimaryService(S_UUID);
-        
-        addLog("4. Getting Characteristic...");
         const char = await service.getCharacteristic(C_UUID);
 
-        addLog("5. Setup Callback...");
-     char.oncharacteristicvaluechanged = (event) => {
+        char.oncharacteristicvaluechanged = (event) => {
             recvCount++;
             document.getElementById('count').textContent = recvCount;
             document.getElementById('step').textContent = "RECEIVING";
             
-            const d = event.target.value; // DataView
-            
-            // データが3バイトあるか確認
-            if (d.byteLength >= 3) {
-                // 1バイトずつ直接変数に入れる（ズレを防ぐ）
-                const byte0 = d.getUint8(0); // Hzの低い方
-                const byte1 = d.getUint8(1); // Hzの高い方
-                const byte2 = d.getUint8(2); // 温度
+            // --- 修正：生のバイト配列を直接読み出し ---
+            const view = event.target.value;
+            let bytes = [];
+            for (let i = 0; i < view.byteLength; i++) {
+                bytes.push(view.getUint8(i));
+            }
 
-                // Hzを復元 (byte1を8ビット左にずらしてbyte0と合体)
-                const h = byte0 | (byte1 << 8);
-                const t = byte2;
+            // LAST DATA に [170, 1, 42] のように生表示
+            document.getElementById('rawdata').textContent = JSON.stringify(bytes);
 
-                // 画面に表示
-                document.getElementById('hz').textContent = h;
-                document.getElementById('temp').textContent = t;
-                
-                // 生データも確認用に表示（[105, 0, 42] のように見えるはず）
-                document.getElementById('rawdata').textContent = `[${byte0}, ${byte1}, ${byte2}]`;
-            } else {
-                addLog("Received short packet: " + d.byteLength + " bytes");
+            if (bytes.length >= 3) {
+                // リトルエンディアンで復元 (byte0 + byte1*256)
+                const hzVal = bytes[0] | (bytes[1] << 8);
+                const tempVal = bytes[2];
+                document.getElementById('hz').textContent = hzVal;
+                document.getElementById('temp').textContent = tempVal;
             }
         };
 
-        addLog("6. Start Notifications...");
-        // これでiPhoneに「Indicate/Notifyを受け取る」と強制的に宣言させます
         await char.startNotifications();
-        
-        addLog("SUCCESS: Data should arrive now.");
-
+        addLog("SUCCESS: Receiving...");
     } catch (e) {
-        addLog(`ERROR: ${e.message}`, true);
+        addLog("ERROR: " + e.message, true);
     }
 };
 </script>
 </body>
 </html>
+
 
 
