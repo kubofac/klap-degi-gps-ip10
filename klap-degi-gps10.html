@@ -486,17 +486,34 @@ document.getElementById('btConnect').onclick = ble;
 document.getElementById('saveLogBtn').onclick = exportGPX;
 document.getElementById('startBtn').onclick = () => {
     if(swState !== 1) { 
-        swState = 1; startTime = Date.now(); lapStartTime = startTime; logData = []; maxSpeed = 0;
-        document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
+        // 計測開始
+        swState = 1; 
+        startTime = Date.now(); 
+        lastLapTime = startTime; // ★1周目の計測開始時間をセット
+        lapStartTime = startTime; 
+        logData = []; 
+        maxSpeed = 0;
+        document.getElementById('saveLogBtn').style.display = 'none'; 
+        tick(); 
     } else { 
-        swState = 2; document.getElementById('saveLogBtn').style.display = 'flex';
+        // 計測停止
+        swState = 2; 
+        document.getElementById('saveLogBtn').style.display = 'flex';
     }
 };
 document.getElementById('lapBtn').onclick = () => {
-    if(swState === 1) processLap(Date.now(), false);
-    else { 
-        swState = 0; lapRecords = []; logData = []; maxSpeed = 0;
-        document.getElementById('lap').innerHTML = ""; document.getElementById('display1').textContent="00:00.000"; document.getElementById('display').textContent="TOTAL 00:00.000"; 
+    if(swState === 1) {
+        // ★修正ポイント：processLapに関数が必要な引数を渡す
+        processLap(Date.now(), false);
+    } else { 
+        // リセット処理
+        swState = 0; 
+        lapRecords = []; 
+        logData = []; 
+        maxSpeed = 0;
+        document.getElementById('lap').innerHTML = ""; 
+        document.getElementById('display1').textContent = "00:00.000"; 
+        document.getElementById('display').textContent = "TOTAL 00:00.000"; 
         document.getElementById('max_speed_val').textContent = "0";
     }
 };
@@ -532,6 +549,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
