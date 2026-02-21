@@ -2,202 +2,129 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI ULTIMATE - BLE 10Hz</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS & BLE DIAGNOSTIC</title>
     <style>
-        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
-        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
-        #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
-
-        .main-ui-container {
-            position: absolute; right: 15px; top: 90px; bottom: 50px;
-            display: flex; flex-direction: row; align-items: flex-start; gap: 25px; z-index: 20; pointer-events: none;
-        }
-
-        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; height: 100%; justify-content: center; }
-        #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; margin-bottom: 15px; }
-        #display1 { font-size: 17vh; letter-spacing: 1px; transform: scaleX(0.95); transform-origin: right; font-weight: 900; line-height: 0.8; color: var(--hrc-white); text-shadow: 4px 4px 15px #000; white-space: nowrap; display: inline-block; }
-        #display { font-size: 3.5vh; color: #bbb; text-shadow: 1px 1px 6px #000; margin-top: 5px; }
-
-        #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; padding-top: 30px; }
-        #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
-        .lap-row { display: flex; justify-content: flex-end; gap: 15px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px; font-weight: 900; }
-        .best-lap { color: var(--hrc-red); }
-
-        .data-panel { display: flex; flex-direction: column; gap: 12px; width: 90px; padding-top: 30px; }
-        .data-box { display: flex; flex-direction: column; align-items: flex-end; }
-        .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
-        .val { font-size: 32px; font-weight: 900; line-height: 0.9; }
-
-        footer { height: 45px; display: flex; gap: 4px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 100; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
-        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
-        #saveLogBtn { background: #155724; display: none; }
+        body { background: #000; color: #fff; font-family: 'Courier New', monospace; padding: 15px; margin: 0; }
+        .container { display: flex; flex-direction: column; gap: 10px; }
+        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; }
+        .label { color: #888; font-size: 12px; margin-bottom: 5px; }
+        .val { font-size: 24px; font-weight: bold; color: #00FF00; }
+        .unit { font-size: 14px; color: #666; margin-left: 5px; }
+        
+        button { width: 100%; height: 60px; background: #004098; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+        
+        /* 診断インジケーター */
+        .diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .diag-box { background: #1a1a1a; padding: 10px; border-radius: 5px; text-align: center; }
+        .recv-pulse { display: inline-block; width: 10px; height: 10px; background: #555; border-radius: 50%; margin-right: 5px; }
+        .active { background: #00FF00; box-shadow: 0 0 10px #00FF00; }
+        
+        #log { font-size: 11px; color: #666; height: 100px; overflow-y: scroll; background: #050505; padding: 5px; margin-top: 10px; border: 1px solid #222; }
     </style>
 </head>
 <body>
 
-<div id="dashboard">
-    <canvas id="canvas"></canvas>
-    <div class="main-ui-container">
-        <div id="info-overlay">
-            <div id="rpm_val">0</div>
-            <div id="display1">00:00.000</div>
-            <div id="display">TOTAL 00:00.000</div>
+<div class="container">
+    <button id="btn">BLE CONNECT</button>
+
+    <div class="diag-grid">
+        <div class="diag-box">
+            <div class="label"><span id="pulse" class="recv-pulse"></span>RECV COUNT</div>
+            <div id="count" class="val">0</div>
         </div>
-        <div id="lap-panel"><div id="lap"></div></div>
-        <div class="data-panel">
-            <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
-            <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color:var(--hrc-orange);">0</div></div>
-            <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
+        <div class="diag-box">
+            <div class="label">STATUS</div>
+            <div id="status" style="color: #FFA500; font-size: 14px;">DISCONNECTED</div>
         </div>
     </div>
-    <footer>
-        <button id="btConnect">BLE CONNECT</button>
-        <button id="startBtn">TIMER</button>
-        <button id="lapBtn">LAP/RESET</button>
-        <button id="saveLogBtn">LOG SAVE</button>
-        <button id="reloadBtn">RELOAD</button>
-    </footer>
+
+    <div class="card">
+        <div class="label">LOCATION (FROM GPS)</div>
+        <div id="coords" class="val" style="font-size: 20px;">WAITING FOR FIX...</div>
+    </div>
+
+    <div class="diag-grid">
+        <div class="card">
+            <div class="label">SPEED</div>
+            <div><span id="speed" class="val">0</span><span class="unit">km/h</span></div>
+        </div>
+        <div class="card">
+            <div class="label">WATER TEMP</div>
+            <div><span id="temp" class="val">0</span><span class="unit">℃</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">ENGINE SPEED (DUMMY)</div>
+        <div><span id="rpm" class="val" style="color:#FFA500;">0</span><span class="unit">RPM</span></div>
+        <div class="label" style="margin-top:5px;">Frequency: <span id="hz">0</span> Hz</div>
+    </div>
+
+    <div id="log">Logs initialized...</div>
 </div>
 
 <script>
-'use strict';
-const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-const CHARACTERISTIC_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
+const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const C_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
+let recvCount = 0;
 
-let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, pulseCount = 1;
-let lastPos = null, lastLapTime = 0, lastBleDataTime = 0;
-let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
-let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], trackLogs = [], currentLapLog = [];
-let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0, previousSideOfLine = null;
-const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
-
-function getSideOfLine(pLat, pLon, l1Lat, l1Lon, l2Lat, l2Lon) {
-    return (l2Lon - l1Lon) * (pLat - l1Lat) - (l2Lat - l1Lat) * (pLon - l1Lon);
+function addLog(m) {
+    const l = document.getElementById('log');
+    l.innerHTML = "[" + new Date().toLocaleTimeString() + "] " + m + "<br>" + l.innerHTML;
 }
 
-async function ble() {
+document.getElementById('btn').onclick = async () => {
     try {
-        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [S_UUID] }] });
+        addLog("Device selected: " + device.name);
+        
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        const char = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        const service = await server.getPrimaryService(S_UUID);
+        const char = await service.getCharacteristic(C_UUID);
+
+        document.getElementById('status').textContent = "CONNECTED";
+        document.getElementById('status').style.color = "#00FF00";
+        addLog("Connected and subscribing...");
 
         char.addEventListener('characteristicvaluechanged', (e) => {
-            lastBleDataTime = Date.now();
             const d = e.target.value;
+            recvCount++;
+            
+            // 受信パルス表示
+            const pulse = document.getElementById('pulse');
+            pulse.classList.add('active');
+            setTimeout(() => pulse.classList.remove('active'), 50);
+
+            document.getElementById('count').textContent = recvCount;
+
             if (d.byteLength >= 13) {
-                // データの復元
+                // Little Endianで解析
                 const latInt = d.getInt32(0, true);
                 const lngInt = d.getInt32(4, true);
-                const lat = latInt / 1000000;
-                const lon = lngInt / 1000000;
-                currentSpeedKmh = d.getUint16(8, true);
-                currentTemp = d.getUint8(10);
+                const speed = d.getUint16(8, true);
+                const temp = d.getUint8(10);
                 const hz = d.getUint16(11, true);
-                currentRPM = (hz * 60) / pulseCount;
 
-                // UI表示
-                document.getElementById('speed_val').textContent = currentSpeedKmh;
-                document.getElementById('temp_val').textContent = currentTemp;
-                if (swState === 1 && currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
-
-                // ラップ判定ロジック
-                const currentPos = { lat, lon, time: Date.now(), speed: currentSpeedKmh, temp: currentTemp, rpm: currentRPM };
-                if (swState === 1) {
-                    currentLapLog.push(currentPos);
-                    if (LAP_LINE_P1.lat !== 0) {
-                        const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
-                        if (lastPos && previousSideOfLine !== null && ((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0))) {
-                            if (currentPos.time - lastLapTime >= 15000) processLap(currentPos.time, true);
-                        }
-                        previousSideOfLine = currentSide;
-                    }
+                // UI反映
+                if (latInt === 0) {
+                    document.getElementById('coords').innerHTML = '<span style="color:#f00;">GPS SEARCHING...</span>';
+                } else {
+                    document.getElementById('coords').textContent = (latInt/1000000).toFixed(6) + ", " + (lngInt/1000000).toFixed(6);
                 }
-                lastPos = currentPos;
+                
+                document.getElementById('speed').textContent = speed;
+                document.getElementById('temp').textContent = temp;
+                document.getElementById('hz').textContent = hz;
+                document.getElementById('rpm').textContent = hz * 60;
             }
         });
+
         await char.startNotifications();
-    } catch (e) { alert(e.message); }
-}
-
-function processLap(exactTime, useFreeze) {
-    const lapTime = exactTime - (lapStartTime || startTime);
-    lapRecords.unshift(lapTime);
-    trackLogs.push([...currentLapLog]);
-    currentLapLog = [];
-    lapStartTime = exactTime; lastLapTime = exactTime;
-    const d = document.getElementById('lap'); d.innerHTML = "";
-    const best = Math.min(...lapRecords);
-    lapRecords.forEach((t, i) => {
-        const r = document.createElement('div'); r.className = `lap-row ${t === best ? 'best-lap' : ''}`;
-        r.innerHTML = `<span>L${lapRecords.length-i}</span><span>${timeFormat(t)}</span>`; d.appendChild(r);
-    });
-    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTime); freezeStartTime = Date.now(); }
-}
-
-function timeFormat(ms) {
-    let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
-    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${mss.toString().padStart(3,'0')}`;
-}
-
-function tick() {
-    if (swState !== 1) return;
-    const now = Date.now();
-    document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
-    if (isFrozen) {
-        document.getElementById('display1').textContent = freezeDisplayTime;
-        if (now - freezeStartTime > 15000) isFrozen = false;
-    } else { 
-        document.getElementById('display1').textContent = timeFormat(now - lapStartTime); 
+        addLog("Notifications started.");
+    } catch (e) {
+        addLog("Error: " + e.message);
     }
-    document.getElementById('max_speed_val').textContent = maxSpeed;
-    requestAnimationFrame(tick);
-}
-
-function drawTacho(rpm) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const w = canvas.width, h = canvas.height, segments = 75, active = Math.floor((rpm / 14000) * segments);
-    const sX = 20, hY = 80, bY = h - 20, rad = bY - hY, curveEnd = 30;
-    for (let i = 0; i <= segments; i++) {
-        let x, y, ang, prog;
-        if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = hY + rad + Math.sin(ang) * rad; }
-        else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - 15 - (sX + rad))); y = hY; ang = 1.5 * Math.PI; }
-        if (i % 10 === 0 || i === segments) {
-            ctx.save(); ctx.fillStyle = i < active ? "#fff" : "#444"; ctx.font = "italic bold 20px Arial"; ctx.textAlign = "center";
-            ctx.fillText(Math.round((i / segments) * 14), x + Math.cos(ang) * 40, y + Math.sin(ang) * 40); ctx.restore();
-        }
-        if (i < segments) {
-            ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "#E4002B" : (((i/segments)*14000) >= 8000 ? "#004098" : "#FFFFFF")) : "#222";
-            ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-4, -20, 8, 40); ctx.restore();
-        }
-    }
-    document.getElementById('rpm_val').textContent = Math.floor(rpm);
-}
-
-document.getElementById('btConnect').onclick = ble;
-document.getElementById('startBtn').onclick = () => {
-    if(swState !== 1) { 
-        swState = 1; startTime = Date.now(); lapStartTime = startTime; maxSpeed = 0; tick(); 
-    } else { 
-        swState = 2; document.getElementById('saveLogBtn').style.display = 'flex';
-    }
-};
-document.getElementById('lapBtn').onclick = () => {
-    if(swState === 1) processLap(Date.now(), false);
-    else { swState = 0; lapRecords = []; document.getElementById('lap').innerHTML = ""; }
-};
-document.getElementById('reloadBtn').onclick = () => location.reload();
-
-window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
-window.onload = () => { 
-    window.dispatchEvent(new Event('resize')); 
-    pulseCount = parseInt(localStorage.getItem('pl1')) || 1;
-    LAP_LINE_P1 = { lat: parseFloat(localStorage.getItem('startLineP1Lat')) || 0, lon: parseFloat(localStorage.getItem('startLineP1Lon')) || 0 };
-    LAP_LINE_P2 = { lat: parseFloat(localStorage.getItem('startLineP2Lat')) || 0, lon: parseFloat(localStorage.getItem('startLineP2Lon')) || 0 };
-    (function r(){ drawTacho(currentRPM); requestAnimationFrame(r); })(); 
 };
 </script>
 </body>
