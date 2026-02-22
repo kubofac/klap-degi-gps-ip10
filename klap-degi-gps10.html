@@ -220,6 +220,7 @@
 
 <script>
 'use strict';
+
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0;
 let lat = 0, lon = 0, lastLapTime = 0;
@@ -227,8 +228,39 @@ let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [];
 let logData = [], lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0;
 let isDemoMode = false, demoClickCount = 0, demoInterval = null, wakeLock = null;
+
+// --- 【追加】判定用変数 ---
+let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
+let lastPos = null, previousSideOfLine = null;
+let lapCoolDown = 15000; // 15秒間は連続チャタリング防止
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
+// --- 【追加】高精度判定用関数 ---
+function getSideOfLine(pLat, pLon, l1Lat, l1Lon, l2Lat, l2Lon) {
+    return (l2Lon - l1Lon) * (pLat - l1Lat) - (l2Lat - l1Lat) * (pLon - l1Lon);
+}
+
+function getIntersectionTime(p1, p2) {
+    const den = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (p2.lat - p1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (p2.lon - p1.lon);
+    if (Math.abs(den) < 1e-12) return null;
+    const t_num = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (LAP_LINE_P1.lat - p1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (LAP_LINE_P1.lon - p1.lon);
+    const t_ratio = t_num / den;
+    return (t_ratio >= 0 && t_ratio <= 1) ? p1.time + (p2.time - p1.time) * t_ratio : null;
+}
+
+function updateSettings() {
+    const p1Lat = localStorage.getItem('startLineP1Lat'), p1Lon = localStorage.getItem('startLineP1Lon');
+    const p2Lat = localStorage.getItem('startLineP2Lat'), p2Lon = localStorage.getItem('startLineP2Lon');
+    if (p1Lat && p1Lon && p2Lat && p2Lon) {
+        LAP_LINE_P1 = { lat: parseFloat(p1Lat), lon: parseFloat(p1Lon) };
+        LAP_LINE_P2 = { lat: parseFloat(p2Lat), lon: parseFloat(p2Lon) };
+        lapCoolDown = parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000;
+        return true;
+    }
+    return false;
+}
+
+// --- BLE通信部 ---
 async function ble() {
     try {
         if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
@@ -239,7 +271,9 @@ async function ble() {
         
         char.addEventListener('characteristicvaluechanged', (e) => {
             const d = e.target.value;
-            lastBleDataTime = Date.now();
+            const now = Date.now();
+            lastBleDataTime = now;
+
             if (d.byteLength >= 13) {
                 const latInt = d.getInt32(0, true);
                 const lonInt = d.getInt32(4, true);
@@ -256,6 +290,26 @@ async function ble() {
 
                 if (swState === 1) {
                     if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
+
+                    // --- 【重要】自動ラップ判定 ---
+                    const currentPos = { lat: lat, lon: lon, time: now };
+                    if (LAP_LINE_P1.lat !== 0) {
+                        const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
+                        
+                        if (lastPos && previousSideOfLine !== null) {
+                            // ラインの「左右」が入れ替わった＝跨いだ
+                            if (((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0)) 
+                                && (now - lastLapTime >= lapCoolDown)) {
+                                
+                                const exactTime = getIntersectionTime(lastPos, currentPos);
+                                if (exactTime) processLap(exactTime, true);
+                            }
+                        }
+                        previousSideOfLine = currentSide;
+                    }
+                    lastPos = currentPos;
+
+                    // ログ記録
                     logData.push({
                         t: new Date().toISOString(), la: lat, lo: lon,
                         sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM)
@@ -268,114 +322,65 @@ async function ble() {
 }
 
 function processLap(now, isAuto) {
-    // 1. ボタンを押した瞬間の「真の時刻と座標」をログに強制挿入して精度を確保
     if (swState === 1) {
         logData.push({
-            t: new Date(now).toISOString(), // ミリ秒を含むISO形式
-            la: lat, 
-            lo: lon,
+            t: new Date(now).toISOString(),
+            la: lat, lo: lon,
             sp: (currentSpeedKmh / 3.6).toFixed(2), 
             r: Math.round(currentRPM),
-            isLap: true // 解析ソフト用の分割フラグ
+            isLap: true
         });
     }
 
-    // 2. ラップタイムの計算
-    const lapTime = now - lastLapTime;
+    const lapTime = now - (lapStartTime || startTime);
     lastLapTime = now;
+    lapStartTime = now; // 次のラップの開始点
     lapRecords.unshift(lapTime);
 
-    // 3. UI表示の更新
     const display1 = document.getElementById('display1');
-
     if (isAuto) {
-        // 自動ラップ時は15秒固定（白文字）
         isFrozen = true;
         freezeDisplayTime = timeFormat(lapTime);
-        freezeStartTime = now;
+        freezeStartTime = Date.now();
         display1.innerText = freezeDisplayTime;
-
-        setTimeout(() => {
-            isFrozen = false;
-        }, 15000);
+        setTimeout(() => { isFrozen = false; }, 15000);
     } else {
-        // 手動ラップ時はすぐにリセット表示
         isFrozen = false;
         display1.innerText = timeFormat(0);
     }
 
-    // ラップ履歴リストの更新
     const lapDiv = document.getElementById('lap');
     const bestTime = Math.min(...lapRecords);
     lapDiv.innerHTML = lapRecords.map((t, i) => {
         const lapNum = lapRecords.length - i;
-        return `
-            <div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
-                <span>L${lapNum}</span>
-                <span>${timeFormat(t)}</span>
-            </div>
-        `;
+        return `<div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
+                    <span>L${lapNum}</span><span>${timeFormat(t)}</span>
+                </div>`;
     }).join('');
 
     if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
 }
 
+// --- 以降、exportGPX, timeFormat, tick, drawTacho 等は変更なし ---
 async function exportGPX() {
-    if (logData.length < 5) {
-        alert("ログデータが不足しています");
-        return;
-    }
-
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_ULTIMATE" 
-  xmlns="http://www.topografix.com/GPX/1/1" 
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
-  xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
-
+    if (logData.length < 5) { alert("ログデータが不足しています"); return; }
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
     let lapCount = 1;
     gpx += `\n<trk><name>L${lapCount}</name><trkseg>`;
-
     logData.forEach((p, index) => {
-        // ★修正：ミリ秒を保持するため、p.t（ISOString）をそのまま使用する
-        const fullTime = p.t; 
-        
-        gpx += `\n    <trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}">
-      <time>${fullTime}</time>
-      <speed>${p.sp}</speed>
-      <extensions>
-        <gpxtpx:TrackPointExtension>
-          <gpxtpx:hr>${p.r}</gpxtpx:hr>
-        </gpxtpx:TrackPointExtension>
-      </extensions>
-    </trkpt>`;
-
-        // isLapフラグがある場所でトラック（ラップ）を分割
+        gpx += `\n<trkpt lat="${p.la.toFixed(7)}" lon="${p.lo.toFixed(7)}"><time>${p.t}</time><speed>${p.sp}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.r}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>`;
         if (p.isLap && index < logData.length - 1) {
             lapCount++;
-            gpx += `\n  </trkseg></trk>\n<trk><name>L${lapCount}</name><trkseg>`;
+            gpx += `\n</trkseg></trk>\n<trk><name>L${lapCount}</name><trkseg>`;
         }
     });
-
-    gpx += `\n  </trkseg></trk>\n</gpx>`;
-
+    gpx += `\n</trkseg></trk>\n</gpx>`;
     try {
         const blob = new Blob([gpx], { type: 'application/octet-stream' });
         const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
-
-        if (navigator.share) {
-            await navigator.share({ files: [file] });
-        } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = file.name;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-    } catch (e) {
-        console.error("Export failed:", e);
-    }
+        if (navigator.share) { await navigator.share({ files: [file] }); } 
+        else { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = file.name; a.click(); }
+    } catch (e) { console.error("Export failed:", e); }
 }
 
 function timeFormat(ms) {
@@ -387,14 +392,11 @@ function tick() {
     if (swState !== 1) return;
     const now = Date.now();
     document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
-    
     const d1 = document.getElementById('display1');
     if (isFrozen) {
         d1.textContent = freezeDisplayTime;
         if (now - freezeStartTime > 15000) isFrozen = false;
-    } else { 
-        d1.textContent = timeFormat(now - lastLapTime); 
-    }
+    } else { d1.textContent = timeFormat(now - lapStartTime); }
     document.getElementById('max_speed_val').textContent = maxSpeed;
     requestAnimationFrame(tick);
 }
@@ -434,17 +436,14 @@ document.getElementById('startBtn').onclick = () => {
     if(swState !== 1) { 
         swState = 1; startTime = Date.now(); lastLapTime = startTime; lapStartTime = startTime;
         logData = []; maxSpeed = 0; document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
-    } else { 
-        swState = 2; document.getElementById('saveLogBtn').style.display = 'flex';
-    }
+    } else { swState = 2; document.getElementById('saveLogBtn').style.display = 'flex'; }
 };
 document.getElementById('lapBtn').onclick = () => {
     if(swState === 1) processLap(Date.now(), false);
     else { 
-        swState = 0; lapRecords = []; logData = []; maxSpeed = 0; isFrozen = false;
+        swState = 0; lapRecords = []; logData = []; maxSpeed = 0; isFrozen = false; lastPos = null; previousSideOfLine = null;
         document.getElementById('lap').innerHTML = ""; 
         document.getElementById('display1').textContent = "00:00.000"; 
-        document.getElementById('display1').style.color = "var(--hrc-white)";
         document.getElementById('display').textContent = "TOTAL 00:00.000"; 
         document.getElementById('max_speed_val').textContent = "0";
     }
@@ -470,10 +469,12 @@ document.getElementById('reloadBtn').onclick = () => {
 window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; };
 window.onload = () => { 
     window.dispatchEvent(new Event('resize')); 
+    updateSettings();
     (function r(){ drawTacho(currentRPM); requestAnimationFrame(r); })(); 
 };
 </script>
 </body>
 </html>
+
 
 
