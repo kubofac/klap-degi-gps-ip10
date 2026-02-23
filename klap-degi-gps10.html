@@ -423,7 +423,26 @@ function updateButtonColors() {
     const now = Date.now();
     const btBtn = document.getElementById('btConnect');
     const isConnected = (lastBleDataTime !== 0 && (now - lastBleDataTime < 2000));
-    btBtn.style.backgroundColor = (isConnected && lat !== 0) ? "var(--hrc-red)" : (isConnected ? "var(--hrc-orange)" : "#1a1a1a");
+    
+    // 設定（P1の緯度）が保存されているかチェック
+    const isSettingsLoaded = (LAP_LINE_P1.lat !== 0);
+
+    if (isConnected) {
+        if (lat !== 0 && isSettingsLoaded) {
+            // 接続OK + GPS受信OK + 設定あり = HRC RED
+            btBtn.style.backgroundColor = "var(--hrc-red)";
+            btBtn.textContent = "BLE READY";
+        } else {
+            // 接続OKだが、GPS未受信 または 設定なし = ORANGE
+            btBtn.style.backgroundColor = "var(--hrc-orange)";
+            btBtn.textContent = isSettingsLoaded ? "WAIT GPS" : "NO LINE SET";
+        }
+    } else {
+        // 未接続 = BLACK
+        btBtn.style.backgroundColor = "#1a1a1a";
+        btBtn.textContent = "BLE START";
+    }
+
     document.getElementById('startBtn').style.backgroundColor = (swState === 1) ? "var(--hrc-red)" : "#1a1a1a";
 }
 setInterval(updateButtonColors, 1000);
@@ -473,6 +492,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
