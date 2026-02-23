@@ -218,7 +218,6 @@
     </footer>
 </div>
 
-<script>
 'use strict';
 
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
@@ -229,13 +228,35 @@ let logData = [], lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0;
 let isDemoMode = false, demoClickCount = 0, demoInterval = null, wakeLock = null;
 
-// --- 【追加】判定用変数 ---
+// --- 判定用変数 ---
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
 let lastPos = null, previousSideOfLine = null;
-let lapCoolDown = 15000; // 15秒間は連続チャタリング防止
+let lapCoolDown = 15000;
+let gpsThresholdValue = 20; // ★ここで距離(m)を制限します
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 【追加】高精度判定用関数 ---
+// --- 【修正】判定アルゴリズム（距離制限付き） ---
+
+// 2点間の距離(m)を計算
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
+    const df = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(df/2)**2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// 垂線の足を計算（ラインの延長線上のどこにいるか）
+function calculatePerpendicularFootApprox(l1, l2, p) {
+    const dx = l2.lon - l1.lon, dy = l2.lat - l1.lat;
+    const lenSq = dx*dx + dy*dy;
+    if (lenSq < 1e-9) return l1;
+    const t = ((p.lon - l1.lon) * dx + (p.lat - l1.lat) * dy) / lenSq;
+    // tが0〜1の間ならラインセグメント上、それ以外は延長線上
+    const ct = Math.max(0, Math.min(1, t)); 
+    return { lat: l1.lat + ct * dy, lon: l1.lon + ct * dx };
+}
+
 function getSideOfLine(pLat, pLon, l1Lat, l1Lon, l2Lat, l2Lon) {
     return (l2Lon - l1Lon) * (pLat - l1Lat) - (l2Lat - l1Lat) * (pLon - l1Lon);
 }
@@ -255,6 +276,7 @@ function updateSettings() {
         LAP_LINE_P1 = { lat: parseFloat(p1Lat), lon: parseFloat(p1Lon) };
         LAP_LINE_P2 = { lat: parseFloat(p2Lat), lon: parseFloat(p2Lon) };
         lapCoolDown = parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000;
+        gpsThresholdValue = parseFloat(localStorage.getItem('gpsThreshold')) || 20; // 閾値を取得
         return true;
     }
     return false;
@@ -291,25 +313,30 @@ async function ble() {
                 if (swState === 1) {
                     if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
 
-                    // --- 【重要】自動ラップ判定 ---
+                    // --- 自動ラップ判定 (距離制限付き) ---
                     const currentPos = { lat: lat, lon: lon, time: now };
                     if (LAP_LINE_P1.lat !== 0) {
                         const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
                         
                         if (lastPos && previousSideOfLine !== null) {
-                            // ラインの「左右」が入れ替わった＝跨いだ
+                            // 1. 線を跨いだか判定
                             if (((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0)) 
                                 && (now - lastLapTime >= lapCoolDown)) {
                                 
-                                const exactTime = getIntersectionTime(lastPos, currentPos);
-                                if (exactTime) processLap(exactTime, true);
+                                // 2. 【重要】ライン座標からの距離をチェック
+                                const foot = calculatePerpendicularFootApprox(LAP_LINE_P1, LAP_LINE_P2, currentPos);
+                                const dist = calculateDistance(currentPos.lat, currentPos.lon, foot.lat, foot.lon);
+                                
+                                if (dist <= gpsThresholdValue) {
+                                    const exactTime = getIntersectionTime(lastPos, currentPos);
+                                    if (exactTime) processLap(exactTime, true);
+                                }
                             }
                         }
                         previousSideOfLine = currentSide;
                     }
                     lastPos = currentPos;
 
-                    // ログ記録
                     logData.push({
                         t: new Date().toISOString(), la: lat, lo: lon,
                         sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM)
@@ -321,6 +348,9 @@ async function ble() {
     } catch (e) { alert("BLE Error: " + e.message); }
 }
 
+// processLap, exportGPX などの残りの関数は以前のコードと共通（変更なし）
+// ... (中略: processLap, exportGPX, timeFormat, tick, drawTacho, updateButtonColors 等)
+
 function processLap(now, isAuto) {
     if (swState === 1) {
         logData.push({
@@ -331,12 +361,10 @@ function processLap(now, isAuto) {
             isLap: true
         });
     }
-
     const lapTime = now - (lapStartTime || startTime);
     lastLapTime = now;
-    lapStartTime = now; // 次のラップの開始点
+    lapStartTime = now;
     lapRecords.unshift(lapTime);
-
     const display1 = document.getElementById('display1');
     if (isAuto) {
         isFrozen = true;
@@ -348,20 +376,15 @@ function processLap(now, isAuto) {
         isFrozen = false;
         display1.innerText = timeFormat(0);
     }
-
     const lapDiv = document.getElementById('lap');
     const bestTime = Math.min(...lapRecords);
     lapDiv.innerHTML = lapRecords.map((t, i) => {
         const lapNum = lapRecords.length - i;
-        return `<div class="lap-row ${t === bestTime ? 'best-lap' : ''}">
-                    <span>L${lapNum}</span><span>${timeFormat(t)}</span>
-                </div>`;
+        return `<div class="lap-row ${t === bestTime ? 'best-lap' : ''}"><span>L${lapNum}</span><span>${timeFormat(t)}</span></div>`;
     }).join('');
-
     if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
 }
 
-// --- 以降、exportGPX, timeFormat, tick, drawTacho 等は変更なし ---
 async function exportGPX() {
     if (logData.length < 5) { alert("ログデータが不足しています"); return; }
     let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
@@ -475,6 +498,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
