@@ -217,7 +217,7 @@
         <button id="reloadBtn">RELOAD</button>
     </footer>
 </div>
-
+<script>
 'use strict';
 
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
@@ -232,12 +232,10 @@ let isDemoMode = false, demoClickCount = 0, demoInterval = null, wakeLock = null
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
 let lastPos = null, previousSideOfLine = null;
 let lapCoolDown = 15000;
-let gpsThresholdValue = 20; // ★ここで距離(m)を制限します
+let gpsThresholdValue = 20; 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 【修正】判定アルゴリズム（距離制限付き） ---
-
-// 2点間の距離(m)を計算
+// --- 判定アルゴリズム ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
@@ -246,13 +244,11 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 垂線の足を計算（ラインの延長線上のどこにいるか）
 function calculatePerpendicularFootApprox(l1, l2, p) {
     const dx = l2.lon - l1.lon, dy = l2.lat - l1.lat;
     const lenSq = dx*dx + dy*dy;
     if (lenSq < 1e-9) return l1;
     const t = ((p.lon - l1.lon) * dx + (p.lat - l1.lat) * dy) / lenSq;
-    // tが0〜1の間ならラインセグメント上、それ以外は延長線上
     const ct = Math.max(0, Math.min(1, t)); 
     return { lat: l1.lat + ct * dy, lon: l1.lon + ct * dx };
 }
@@ -276,7 +272,7 @@ function updateSettings() {
         LAP_LINE_P1 = { lat: parseFloat(p1Lat), lon: parseFloat(p1Lon) };
         LAP_LINE_P2 = { lat: parseFloat(p2Lat), lon: parseFloat(p2Lon) };
         lapCoolDown = parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000;
-        gpsThresholdValue = parseFloat(localStorage.getItem('gpsThreshold')) || 20; // 閾値を取得
+        gpsThresholdValue = parseFloat(localStorage.getItem('gpsThreshold')) || 20;
         return true;
     }
     return false;
@@ -312,21 +308,13 @@ async function ble() {
 
                 if (swState === 1) {
                     if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
-
-                    // --- 自動ラップ判定 (距離制限付き) ---
                     const currentPos = { lat: lat, lon: lon, time: now };
                     if (LAP_LINE_P1.lat !== 0) {
                         const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
-                        
                         if (lastPos && previousSideOfLine !== null) {
-                            // 1. 線を跨いだか判定
-                            if (((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0)) 
-                                && (now - lastLapTime >= lapCoolDown)) {
-                                
-                                // 2. 【重要】ライン座標からの距離をチェック
+                            if (((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0)) && (now - lastLapTime >= lapCoolDown)) {
                                 const foot = calculatePerpendicularFootApprox(LAP_LINE_P1, LAP_LINE_P2, currentPos);
                                 const dist = calculateDistance(currentPos.lat, currentPos.lon, foot.lat, foot.lon);
-                                
                                 if (dist <= gpsThresholdValue) {
                                     const exactTime = getIntersectionTime(lastPos, currentPos);
                                     if (exactTime) processLap(exactTime, true);
@@ -336,11 +324,7 @@ async function ble() {
                         previousSideOfLine = currentSide;
                     }
                     lastPos = currentPos;
-
-                    logData.push({
-                        t: new Date().toISOString(), la: lat, lo: lon,
-                        sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM)
-                    });
+                    logData.push({ t: new Date().toISOString(), la: lat, lo: lon, sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM) });
                 }
             }
         });
@@ -348,18 +332,9 @@ async function ble() {
     } catch (e) { alert("BLE Error: " + e.message); }
 }
 
-// processLap, exportGPX などの残りの関数は以前のコードと共通（変更なし）
-// ... (中略: processLap, exportGPX, timeFormat, tick, drawTacho, updateButtonColors 等)
-
 function processLap(now, isAuto) {
     if (swState === 1) {
-        logData.push({
-            t: new Date(now).toISOString(),
-            la: lat, lo: lon,
-            sp: (currentSpeedKmh / 3.6).toFixed(2), 
-            r: Math.round(currentRPM),
-            isLap: true
-        });
+        logData.push({ t: new Date(now).toISOString(), la: lat, lo: lon, sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM), isLap: true });
     }
     const lapTime = now - (lapStartTime || startTime);
     lastLapTime = now;
@@ -498,6 +473,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
