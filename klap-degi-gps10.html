@@ -5,186 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>KLAP DEGI ULTIMATE V3.5</title>
+    <title>KLAP DEGI ULTIMATE V3.5 - PRECISION</title>
 <style>
     :root { 
-        --hrc-red: #E4002B; 
-        --hrc-blue: #004098; 
-        --hrc-white: #ffffff; 
-        --bg-dark: #000000; 
-        --hrc-orange: #FFA500; 
+        --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; 
+        --bg-dark: #000000; --hrc-orange: #FFA500; 
     }
-
     body, html { 
-        margin: 0; 
-        padding: 0; 
-        width: 100%; 
-        height: 100%; 
-        background-color: var(--bg-dark); 
-        color: var(--hrc-white); 
-        font-family: 'Arial Black', sans-serif; 
-        overflow: hidden; 
-        position: fixed; 
+        margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); 
+        color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; 
     }
-
     #dashboard { 
-        position: relative; 
-        display: flex; 
-        flex-direction: column; 
-        height: 100dvh; 
-        width: 100vw; 
+        position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; 
         padding-top: env(safe-area-inset-top); 
     }
-
     #canvas { 
-        position: absolute; 
-        top: 0; 
-        left: 0; 
-        width: 100% !important; 
-        height: calc(100% - 60px) !important; 
-        z-index: 1; 
+        position: absolute; top: 0; left: 0; width: 100% !important; 
+        height: calc(100% - 60px) !important; z-index: 1; 
     }
-
     .main-ui-container {
-        position: absolute; 
-        right: 5px; 
-        top: 130px; 
-        bottom: 60px; 
-        display: flex; 
-        flex-direction: row; 
-        align-items: flex-start; 
-        gap: 15px; 
-        z-index: 20; 
-        pointer-events: none;
+        position: absolute; right: 5px; top: 130px; bottom: 60px; 
+        display: flex; flex-direction: row; align-items: flex-start; gap: 15px; z-index: 20; pointer-events: none;
     }
-
     #info-overlay { 
-        display: flex; 
-        flex-direction: column; 
-        align-items: flex-end; 
-        text-align: right; 
-        height: 100%; 
-        justify-content: center; 
+        display: flex; flex-direction: column; align-items: flex-end; text-align: right; 
+        height: 100%; justify-content: center; 
     }
-
-    #rpm_val { 
-        font-size: 11vh; 
-        font-weight: 900; 
-        line-height: 0.8; 
-        text-shadow: 3px 3px 10px #000; 
-        margin-bottom: 10px; 
-    }
-
+    #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; margin-bottom: 10px; }
     #display1 { 
-        font-size: 17vh; 
-        letter-spacing: -2px; 
-        transform: scaleX(0.9); 
-        transform-origin: right; 
-        font-weight: 900; 
-        line-height: 0.8; 
-        color: var(--hrc-white); 
-        text-shadow: 4px 4px 15px #000; 
-        white-space: nowrap; 
+        font-size: 17vh; letter-spacing: -2px; transform: scaleX(0.9); transform-origin: right; 
+        font-weight: 900; line-height: 0.8; color: var(--hrc-white); text-shadow: 4px 4px 15px #000; white-space: nowrap; 
     }
-
-    #display { 
-        font-size: 3.5vh; 
-        color: #bbb; 
-        text-shadow: 1px 1px 6px #000; 
-        margin-top: 5px; 
-    }
-
-    #lap-panel { 
-        width: 130px; 
-        height: calc(100% - 20px); 
-        display: flex; 
-        flex-direction: column; 
-        overflow: hidden; 
-        padding-top: 10px; 
-    }
-
-    #lap { 
-        flex: 1; 
-        overflow-y: auto; 
-        -webkit-overflow-scrolling: touch; 
-        scrollbar-width: none; 
-    }
-
+    #display { font-size: 3.5vh; color: #bbb; text-shadow: 1px 1px 6px #000; margin-top: 5px; }
+    #lap-panel { width: 130px; height: calc(100% - 20px); display: flex; flex-direction: column; overflow: hidden; padding-top: 10px; }
+    #lap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
     #lap::-webkit-scrollbar { display: none; }
-
     .lap-row { 
-        display: flex; 
-        justify-content: flex-end; 
-        gap: 10px; 
-        padding: 5px 0; 
-        border-bottom: 1px solid rgba(255,255,255,0.1); 
-        font-size: 15px; 
-        font-weight: 900; 
+        display: flex; justify-content: flex-end; gap: 10px; padding: 5px 0; 
+        border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; font-weight: 900; 
     }
-
     .best-lap { color: var(--hrc-red); }
-
-    .data-panel { 
-        display: flex; 
-        flex-direction: column; 
-        gap: 10px; 
-        width: 85px; 
-        padding-top: 10px; 
-    }
-
-    .data-box { 
-        display: flex; 
-        flex-direction: column; 
-        align-items: flex-end; 
-    }
-
-    .label { 
-        font-size: 10px; 
-        color: var(--hrc-red); 
-        font-weight: bold; 
-    }
-
-    .val { 
-        font-size: 30px; 
-        font-weight: 900; 
-        line-height: 0.9; 
-    }
-
+    .data-panel { display: flex; flex-direction: column; gap: 10px; width: 85px; padding-top: 10px; }
+    .data-box { display: flex; flex-direction: column; align-items: flex-end; }
+    .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
+    .val { font-size: 30px; font-weight: 900; line-height: 0.9; }
     footer { 
-        height: 45px; 
-        display: flex; 
-        gap: 4px; 
-        padding: 3px; 
-        background: #000; 
-        border-top: 1px solid #333; 
-        z-index: 10000; 
-        position: fixed; 
-        bottom: 0; 
-        left: 0; 
-        right: 0; 
-        padding-bottom: env(safe-area-inset-bottom); 
-        pointer-events: auto;
+        height: 45px; display: flex; gap: 4px; padding: 3px; background: #000; border-top: 1px solid #333; 
+        z-index: 10000; position: fixed; bottom: 0; left: 0; right: 0; 
+        padding-bottom: env(safe-area-inset-bottom); pointer-events: auto;
     }
-
     button { 
-        flex: 1; 
-        background: #1a1a1a; 
-        color: #fff; 
-        border: 1px solid #444; 
-        border-radius: 6px; 
-        font-size: 10px; 
-        font-weight: bold; 
-        cursor: pointer; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        height: 100%; 
+        flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 6px; 
+        font-size: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; 
+        justify-content: center; height: 100%; 
     }
-
     #saveLogBtn { background: #155724; display: none; }
-
     .demo-active { animation: demoBlink 1s infinite; }
-
     @keyframes demoBlink { 
         0% {background-color: var(--hrc-orange); color: #000;} 
         50% {background-color: #885500; color: #000;} 
@@ -217,6 +93,7 @@
         <button id="reloadBtn">RELOAD</button>
     </footer>
 </div>
+
 <script>
 'use strict';
 
@@ -228,14 +105,15 @@ let logData = [], lastBleDataTime = 0;
 let isFrozen = false, freezeDisplayTime = "", freezeStartTime = 0;
 let isDemoMode = false, demoClickCount = 0, demoInterval = null, wakeLock = null;
 
-// --- 判定用変数 ---
+// --- 判定用設定 ---
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
-let lastPos = null, previousSideOfLine = null;
+let lastPos = null;
 let lapCoolDown = 15000;
-let gpsThresholdValue = 20; 
+let gpsThresholdValue = 40; 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 判定アルゴリズム ---
+// --- 1. 最強の判定アルゴリズム (線分交差＋補間) ---
+
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
@@ -244,25 +122,24 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function calculatePerpendicularFootApprox(l1, l2, p) {
-    const dx = l2.lon - l1.lon, dy = l2.lat - l1.lat;
-    const lenSq = dx*dx + dy*dy;
-    if (lenSq < 1e-9) return l1;
-    const t = ((p.lon - l1.lon) * dx + (p.lat - l1.lat) * dy) / lenSq;
-    const ct = Math.max(0, Math.min(1, t)); 
-    return { lat: l1.lat + ct * dy, lon: l1.lon + ct * dx };
-}
-
-function getSideOfLine(pLat, pLon, l1Lat, l1Lon, l2Lat, l2Lon) {
-    return (l2Lon - l1Lon) * (pLat - l1Lat) - (l2Lat - l1Lat) * (pLon - l1Lon);
-}
-
+// 2本の線分(自車の移動/スタートライン)が交差するか判定し、交差した「理論上の時刻」を返す
 function getIntersectionTime(p1, p2) {
-    const den = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (p2.lat - p1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (p2.lon - p1.lon);
-    if (Math.abs(den) < 1e-12) return null;
-    const t_num = (LAP_LINE_P2.lon - LAP_LINE_P1.lon) * (LAP_LINE_P1.lat - p1.lat) - (LAP_LINE_P2.lat - LAP_LINE_P1.lat) * (LAP_LINE_P1.lon - p1.lon);
-    const t_ratio = t_num / den;
-    return (t_ratio >= 0 && t_ratio <= 1) ? p1.time + (p2.time - p1.time) * t_ratio : null;
+    if (!LAP_LINE_P1.lat || !LAP_LINE_P2.lat) return null;
+
+    const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
+    const x3 = LAP_LINE_P1.lon, y3 = LAP_LINE_P1.lat, x4 = LAP_LINE_P2.lon, y4 = LAP_LINE_P2.lat;
+
+    const den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+    if (Math.abs(den) < 1e-12) return null; // 平行
+
+    const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den; // 自車軌跡上の交点比率
+    const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den; // ライン上の交点比率
+
+    // t, uが0〜1なら、線分同士が交差している（門を通過した）
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return p1.time + (p2.time - p1.time) * t; 
+    }
+    return null;
 }
 
 function updateSettings() {
@@ -272,13 +149,14 @@ function updateSettings() {
         LAP_LINE_P1 = { lat: parseFloat(p1Lat), lon: parseFloat(p1Lon) };
         LAP_LINE_P2 = { lat: parseFloat(p2Lat), lon: parseFloat(p2Lon) };
         lapCoolDown = parseFloat(localStorage.getItem('lapCoolDownTime')) || 15000;
-        gpsThresholdValue = parseFloat(localStorage.getItem('gpsThreshold')) || 20;
+        gpsThresholdValue = parseFloat(localStorage.getItem('gpsThreshold')) || 40;
         return true;
     }
     return false;
 }
 
-// --- BLE通信部 ---
+// --- 2. BLE通信部 (ESP32連携) ---
+
 async function ble() {
     try {
         if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
@@ -293,10 +171,8 @@ async function ble() {
             lastBleDataTime = now;
 
             if (d.byteLength >= 13) {
-                const latInt = d.getInt32(0, true);
-                const lonInt = d.getInt32(4, true);
-                lat = latInt / 1000000;
-                lon = lonInt / 1000000;
+                lat = d.getInt32(0, true) / 1000000;
+                lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
                 let rawHz = d.getUint16(11, true); 
@@ -309,19 +185,17 @@ async function ble() {
                 if (swState === 1) {
                     if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
                     const currentPos = { lat: lat, lon: lon, time: now };
-                    if (LAP_LINE_P1.lat !== 0) {
-                        const currentSide = getSideOfLine(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon, LAP_LINE_P2.lat, LAP_LINE_P2.lon);
-                        if (lastPos && previousSideOfLine !== null) {
-                            if (((previousSideOfLine > 0 && currentSide < 0) || (previousSideOfLine < 0 && currentSide > 0)) && (now - lastLapTime >= lapCoolDown)) {
-                                const foot = calculatePerpendicularFootApprox(LAP_LINE_P1, LAP_LINE_P2, currentPos);
-                                const dist = calculateDistance(currentPos.lat, currentPos.lon, foot.lat, foot.lon);
-                                if (dist <= gpsThresholdValue) {
-                                    const exactTime = getIntersectionTime(lastPos, currentPos);
-                                    if (exactTime) processLap(exactTime, true);
-                                }
+
+                    if (lastPos && LAP_LINE_P1.lat !== 0) {
+                        const exactTime = getIntersectionTime(lastPos, currentPos);
+                        if (exactTime !== null) {
+                            const timeSinceLastLap = exactTime - lastLapTime;
+                            const dist = calculateDistance(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon);
+                            
+                            if (timeSinceLastLap >= lapCoolDown && dist <= gpsThresholdValue) {
+                                processLap(exactTime, true);
                             }
                         }
-                        previousSideOfLine = currentSide;
                     }
                     lastPos = currentPos;
                     logData.push({ t: new Date().toISOString(), la: lat, lo: lon, sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM) });
@@ -332,25 +206,28 @@ async function ble() {
     } catch (e) { alert("BLE Error: " + e.message); }
 }
 
-function processLap(now, isAuto) {
+// --- 3. ラップ処理・ログ出力 ---
+
+function processLap(exactTime, isAuto) {
     if (swState === 1) {
-        logData.push({ t: new Date(now).toISOString(), la: lat, lo: lon, sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM), isLap: true });
+        logData.push({ t: new Date(exactTime).toISOString(), la: lat, lo: lon, sp: (currentSpeedKmh / 3.6).toFixed(2), r: Math.round(currentRPM), isLap: true });
     }
-    const lapTime = now - (lapStartTime || startTime);
-    lastLapTime = now;
-    lapStartTime = now;
+    const lapTime = exactTime - (lapStartTime || startTime);
+    lastLapTime = exactTime;
+    lapStartTime = exactTime; // 補間時刻を次周の起点にする
     lapRecords.unshift(lapTime);
+
     const display1 = document.getElementById('display1');
     if (isAuto) {
         isFrozen = true;
         freezeDisplayTime = timeFormat(lapTime);
         freezeStartTime = Date.now();
         display1.innerText = freezeDisplayTime;
-        setTimeout(() => { isFrozen = false; }, 15000);
     } else {
         isFrozen = false;
         display1.innerText = timeFormat(0);
     }
+    
     const lapDiv = document.getElementById('lap');
     const bestTime = Math.min(...lapRecords);
     lapDiv.innerHTML = lapRecords.map((t, i) => {
@@ -362,7 +239,7 @@ function processLap(now, isAuto) {
 
 async function exportGPX() {
     if (logData.length < 5) { alert("ログデータが不足しています"); return; }
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_ULTIMATE" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">`;
     let lapCount = 1;
     gpx += `\n<trk><name>L${lapCount}</name><trkseg>`;
     logData.forEach((p, index) => {
@@ -373,18 +250,18 @@ async function exportGPX() {
         }
     });
     gpx += `\n</trkseg></trk>\n</gpx>`;
-    try {
-        const blob = new Blob([gpx], { type: 'application/octet-stream' });
-        const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
-        if (navigator.share) { await navigator.share({ files: [file] }); } 
-        else { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = file.name; a.click(); }
-    } catch (e) { console.error("Export failed:", e); }
+    const blob = new Blob([gpx], { type: 'application/octet-stream' });
+    const file = new File([blob], `KLAP_${Math.floor(Date.now()/1000)}.gpx`, { type: 'application/octet-stream' });
+    if (navigator.share) { await navigator.share({ files: [file] }); } 
+    else { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = file.name; a.click(); }
 }
 
 function timeFormat(ms) {
     let m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), mss = Math.floor(ms%1000);
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${mss.toString().padStart(3,'0')}`;
 }
+
+// --- 4. 描画・UIループ ---
 
 function tick() {
     if (swState !== 1) return;
@@ -423,42 +300,36 @@ function updateButtonColors() {
     const now = Date.now();
     const btBtn = document.getElementById('btConnect');
     const isConnected = (lastBleDataTime !== 0 && (now - lastBleDataTime < 2000));
-    
-    // 設定（P1の緯度）が保存されているかチェック
     const isSettingsLoaded = (LAP_LINE_P1.lat !== 0);
 
     if (isConnected) {
         if (lat !== 0 && isSettingsLoaded) {
-            // 接続OK + GPS受信OK + 設定あり = HRC RED
-            btBtn.style.backgroundColor = "var(--hrc-red)";
-            btBtn.textContent = "BLE READY";
+            btBtn.style.backgroundColor = "var(--hrc-red)"; btBtn.textContent = "BLE READY";
         } else {
-            // 接続OKだが、GPS未受信 または 設定なし = ORANGE
             btBtn.style.backgroundColor = "var(--hrc-orange)";
             btBtn.textContent = isSettingsLoaded ? "WAIT GPS" : "NO LINE SET";
         }
     } else {
-        // 未接続 = BLACK
-        btBtn.style.backgroundColor = "#1a1a1a";
-        btBtn.textContent = "BLE START";
+        btBtn.style.backgroundColor = "#1a1a1a"; btBtn.textContent = "BLE START";
     }
-
     document.getElementById('startBtn').style.backgroundColor = (swState === 1) ? "var(--hrc-red)" : "#1a1a1a";
 }
 setInterval(updateButtonColors, 1000);
+
+// --- 5. イベントリスナー ---
 
 document.getElementById('btConnect').onclick = ble;
 document.getElementById('saveLogBtn').onclick = exportGPX;
 document.getElementById('startBtn').onclick = () => {
     if(swState !== 1) { 
         swState = 1; startTime = Date.now(); lastLapTime = startTime; lapStartTime = startTime;
-        logData = []; maxSpeed = 0; document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
+        logData = []; maxSpeed = 0; lastPos = null; document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
     } else { swState = 2; document.getElementById('saveLogBtn').style.display = 'flex'; }
 };
 document.getElementById('lapBtn').onclick = () => {
     if(swState === 1) processLap(Date.now(), false);
     else { 
-        swState = 0; lapRecords = []; logData = []; maxSpeed = 0; isFrozen = false; lastPos = null; previousSideOfLine = null;
+        swState = 0; lapRecords = []; logData = []; maxSpeed = 0; isFrozen = false; lastPos = null;
         document.getElementById('lap').innerHTML = ""; 
         document.getElementById('display1').textContent = "00:00.000"; 
         document.getElementById('display').textContent = "TOTAL 00:00.000"; 
@@ -492,9 +363,3 @@ window.onload = () => {
 </script>
 </body>
 </html>
-
-
-
-
-
-
