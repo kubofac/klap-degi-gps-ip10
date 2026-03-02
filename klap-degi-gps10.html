@@ -112,7 +112,7 @@ let lapCoolDown = 15000;
 let gpsThresholdValue = 40; 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 1. 最強の判定アルゴリズム (線分交差＋補間) ---
+// --- 1. 最強の判定アルゴリズム (線分交差＋補間＋逆走防止) ---
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -122,7 +122,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 2本の線分(自車の移動/スタートライン)が交差するか判定し、交差した「理論上の時刻」を返す
+// 2本の線分が交差するか判定し、かつ「向き(外積)」が正しい場合のみ理論上の通過時刻を返す
 function getIntersectionTime(p1, p2) {
     if (!LAP_LINE_P1.lat || !LAP_LINE_P2.lat) return null;
 
@@ -132,12 +132,29 @@ function getIntersectionTime(p1, p2) {
     const den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
     if (Math.abs(den) < 1e-12) return null; // 平行
 
-    const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den; // 自車軌跡上の交点比率
-    const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den; // ライン上の交点比率
+    const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den; // 自車軌跡上の比率
+    const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den; // ライン上の比率
 
-    // t, uが0〜1なら、線分同士が交差している（門を通過した）
+    // t, uが0〜1なら、計測ラインの幅（門）を通過した
     if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-        return p1.time + (p2.time - p1.time) * t; 
+        
+        // --- 逆走防止判定 (外積: Cross Product) ---
+        // 進行方向に向かって左(P1)から右(P2)へのベクトル L
+        const Lx = x4 - x3;
+        const Ly = y4 - y3;
+        // 自車の移動ベクトル V (p1 -> p2)
+        const Vx = x2 - x1;
+        const Vy = y2 - y1;
+
+        // 外積がプラスなら「順走（ラインを前から跨いだ）」
+        const crossProduct = (Lx * Vy) - (Ly * Vx);
+
+        if (crossProduct > 0) {
+            return p1.time + (p2.time - p1.time) * t; 
+        } else {
+            console.log("Direction check: Backward crossing ignored.");
+            return null;
+        }
     }
     return null;
 }
@@ -171,6 +188,7 @@ async function ble() {
             lastBleDataTime = now;
 
             if (d.byteLength >= 13) {
+                // ESP32側からのint32データをパース
                 lat = d.getInt32(0, true) / 1000000;
                 lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
@@ -187,9 +205,12 @@ async function ble() {
                     const currentPos = { lat: lat, lon: lon, time: now };
 
                     if (lastPos && LAP_LINE_P1.lat !== 0) {
+                        // 修正ポイント：外積・交差を同時判定
                         const exactTime = getIntersectionTime(lastPos, currentPos);
+                        
                         if (exactTime !== null) {
                             const timeSinceLastLap = exactTime - lastLapTime;
+                            // P1からの距離チェック（円の判定）
                             const dist = calculateDistance(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon);
                             
                             if (timeSinceLastLap >= lapCoolDown && dist <= gpsThresholdValue) {
@@ -214,7 +235,7 @@ function processLap(exactTime, isAuto) {
     }
     const lapTime = exactTime - (lapStartTime || startTime);
     lastLapTime = exactTime;
-    lapStartTime = exactTime; // 補間時刻を次周の起点にする
+    lapStartTime = exactTime; // 補間された正確な時刻を起点にする
     lapRecords.unshift(lapTime);
 
     const display1 = document.getElementById('display1');
@@ -363,3 +384,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
