@@ -107,12 +107,13 @@ let isDemoMode = false, demoClickCount = 0, demoInterval = null, wakeLock = null
 
 // --- 判定用設定 ---
 let LAP_LINE_P1 = { lat: 0, lon: 0 }, LAP_LINE_P2 = { lat: 0, lon: 0 };
+let detectedDirection = null; // 💡 最初の通過方向を保持
 let lastPos = null;
 let lapCoolDown = 15000;
 let gpsThresholdValue = 40; 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 1. 最強の判定アルゴリズム (線分交差＋補間＋逆走防止) ---
+// --- 1. 数学的判定ロジック (線分交差＋カプセル判定＋方向記憶) ---
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -122,7 +123,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 2本の線分が交差するか判定し、かつ「向き(外積)」が正しい場合のみ理論上の通過時刻を返す
 function getIntersectionTime(p1, p2) {
     if (!LAP_LINE_P1.lat || !LAP_LINE_P2.lat) return null;
 
@@ -130,30 +130,30 @@ function getIntersectionTime(p1, p2) {
     const x3 = LAP_LINE_P1.lon, y3 = LAP_LINE_P1.lat, x4 = LAP_LINE_P2.lon, y4 = LAP_LINE_P2.lat;
 
     const den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-    if (Math.abs(den) < 1e-12) return null; // 平行
+    if (Math.abs(den) < 1e-12) return null;
 
-    const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den; // 自車軌跡上の比率
-    const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den; // ライン上の比率
+    const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den; 
+    const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den; 
 
-    // t, uが0〜1なら、計測ラインの幅（門）を通過した
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-        
-        // --- 逆走防止判定 (外積: Cross Product) ---
-        // 進行方向に向かって左(P1)から右(P2)へのベクトル L
+    if (t >= 0 && t <= 1) {
+        // --- 方向判定 (外積) ---
         const Lx = x4 - x3;
         const Ly = y4 - y3;
-        // 自車の移動ベクトル V (p1 -> p2)
         const Vx = x2 - x1;
         const Vy = y2 - y1;
-
-        // 外積がプラスなら「順走（ラインを前から跨いだ）」
         const crossProduct = (Lx * Vy) - (Ly * Vx);
+        const currentMoveDir = crossProduct > 0 ? 1 : -1;
 
-        if (crossProduct > 0) {
+        // 初回通過時に方向を記憶
+        if (detectedDirection === null) {
+            detectedDirection = currentMoveDir;
+            console.log("BLE Mode: Start direction memorized: " + detectedDirection);
+        }
+
+        // 💡 記憶した方向と一致し、かつP1-P2の有効幅（遊び含む）を通過したか判定
+        // uの値が -0.2 〜 1.2 なので、支柱の外側20%まで検知範囲を広げています
+        if (currentMoveDir === detectedDirection && u >= -0.2 && u <= 1.2) {
             return p1.time + (p2.time - p1.time) * t; 
-        } else {
-            console.log("Direction check: Backward crossing ignored.");
-            return null;
         }
     }
     return null;
@@ -188,7 +188,6 @@ async function ble() {
             lastBleDataTime = now;
 
             if (d.byteLength >= 13) {
-                // ESP32側からのint32データをパース
                 lat = d.getInt32(0, true) / 1000000;
                 lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
@@ -205,12 +204,10 @@ async function ble() {
                     const currentPos = { lat: lat, lon: lon, time: now };
 
                     if (lastPos && LAP_LINE_P1.lat !== 0) {
-                        // 修正ポイント：外積・交差を同時判定
                         const exactTime = getIntersectionTime(lastPos, currentPos);
                         
                         if (exactTime !== null) {
                             const timeSinceLastLap = exactTime - lastLapTime;
-                            // P1からの距離チェック（円の判定）
                             const dist = calculateDistance(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon);
                             
                             if (timeSinceLastLap >= lapCoolDown && dist <= gpsThresholdValue) {
@@ -235,7 +232,7 @@ function processLap(exactTime, isAuto) {
     }
     const lapTime = exactTime - (lapStartTime || startTime);
     lastLapTime = exactTime;
-    lapStartTime = exactTime; // 補間された正確な時刻を起点にする
+    lapStartTime = exactTime; 
     lapRecords.unshift(lapTime);
 
     const display1 = document.getElementById('display1');
@@ -344,13 +341,16 @@ document.getElementById('saveLogBtn').onclick = exportGPX;
 document.getElementById('startBtn').onclick = () => {
     if(swState !== 1) { 
         swState = 1; startTime = Date.now(); lastLapTime = startTime; lapStartTime = startTime;
-        logData = []; maxSpeed = 0; lastPos = null; document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
+        logData = []; maxSpeed = 0; lastPos = null; 
+        detectedDirection = null; // 💡 方向記憶をリセットして再学習
+        document.getElementById('saveLogBtn').style.display = 'none'; tick(); 
     } else { swState = 2; document.getElementById('saveLogBtn').style.display = 'flex'; }
 };
 document.getElementById('lapBtn').onclick = () => {
     if(swState === 1) processLap(Date.now(), false);
     else { 
         swState = 0; lapRecords = []; logData = []; maxSpeed = 0; isFrozen = false; lastPos = null;
+        detectedDirection = null; // 💡 方向記憶をリセット
         document.getElementById('lap').innerHTML = ""; 
         document.getElementById('display1').textContent = "00:00.000"; 
         document.getElementById('display').textContent = "TOTAL 00:00.000"; 
@@ -384,4 +384,5 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
