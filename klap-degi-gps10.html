@@ -174,6 +174,8 @@ function updateSettings() {
 
 // --- 2. BLE通信部 (ESP32連携) ---
 
+// --- 2. BLE通信部 (ESP32連携) --- 修正版 ---
+
 async function ble() {
     try {
         if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
@@ -204,13 +206,17 @@ async function ble() {
                     const currentPos = { lat: lat, lon: lon, time: now };
 
                     if (lastPos && LAP_LINE_P1.lat !== 0) {
+                        // 1. カプセル判定（交差・方向・有効幅u）を実行
                         const exactTime = getIntersectionTime(lastPos, currentPos);
                         
+                        // exactTimeがnullでない ＝ 「カプセル内でラインを跨いだ」
                         if (exactTime !== null) {
                             const timeSinceLastLap = exactTime - lastLapTime;
-                            const dist = calculateDistance(lat, lon, LAP_LINE_P1.lat, LAP_LINE_P1.lon);
                             
-                            if (timeSinceLastLap >= lapCoolDown && dist <= gpsThresholdValue) {
+                            // 💡 【修正の核心】
+                            // 従来の「dist <= gpsThresholdValue」という門番（円形判定）を削除。
+                            // クールダウン（例: 15秒）さえ過ぎていれば、即ラップを確定させます。
+                            if (timeSinceLastLap >= lapCoolDown) {
                                 processLap(exactTime, true);
                             }
                         }
@@ -384,6 +390,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
