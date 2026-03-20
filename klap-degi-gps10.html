@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI V3.8 - ULTIMATE GUARD</title>
+    <title>KLAP DEGI V3.8 - ULTIMATE GUARD (Fixed)</title>
     <style>
         :root { 
             --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; 
@@ -101,12 +101,11 @@
 'use strict';
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], gpsLog = [];
-let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, lastPos = null;
+let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeedInLap = 0, lastPos = null;
 let lat = 0, lon = 0, isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let lines = { startLine: null, s1Line: null, s2Line: null, s3Line: null };
 let s1_abs = 0, s2_abs = 0, s3_abs = 0, lastPassedSectorTime = 0;
 let validDir = null, sectorDirs = { s1: null, s2: null, s3: null };
-let nextExpectedSector = 's1'; 
 let pulsePerRev = 1, cooldownMs = 15000;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
@@ -127,6 +126,7 @@ function init() {
     cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 10000;
 }
 
+// 判定関数の名称を統一
 function checkLineCross(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -144,7 +144,6 @@ function checkLineCross(p1, p2, line) {
 
 async function bleConnect() {
     try {
-        // 1. BLEデバイスの検索と接続
         const device = await navigator.bluetooth.requestDevice({ 
             filters: [{ services: [SERVICE_UUID] }] 
         });
@@ -153,18 +152,13 @@ async function bleConnect() {
         const char = await service.getCharacteristic(PULSE_UUID);
         
         const btn = document.getElementById('btConnect');
-        
-        // 2. 通知（データ受信）の開始
         await char.startNotifications();
-        this.classList.add('active'); // ボタンをアクティブ状態に
+        this.classList.add('active'); 
         
-        // 3. データ受信イベント
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
             const now = Date.now();
 
-            // データパケットの解析 (ESP32側の構造に合わせる)
-            // 0-3:lat, 4-7:lon, 8-9:spd, 10:temp, 11-12:rpm と想定
             if (d.byteLength >= 13) {
                 lat = d.getInt32(0, true) / 1000000;
                 lon = d.getInt32(4, true) / 1000000;
@@ -172,32 +166,25 @@ async function bleConnect() {
                 currentTemp = d.getUint8(10);
                 currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
 
-                // --- 【ステータス表示ロジック】 ---
+                // ステータス表示
                 if (lat !== 0 && lon !== 0) {
-                    // GPS測位完了: 赤背景 (GPX記録可能)
                     btn.style.backgroundColor = "var(--hrc-red)";
                     btn.style.color = "#fff";
                     btn.textContent = "GPX FIXED";
                 } else {
-                    // BLE接続のみ/GPS捕捉待ち: オレンジ背景
                     btn.style.backgroundColor = "var(--hrc-orange)";
                     btn.style.color = "#000";
                     btn.textContent = "WAITING GPS";
                 }
 
-                // リアルタイム表示の更新
                 document.getElementById('temp_val').textContent = currentTemp;
-                if (currentRPM > maxRpmInLap) maxRpmInLap = Math.round(currentRPM);
 
-                // --- 【走行データ記録 & 判定ロジック】 ---
-                if (swState === 1) { // TIMERが動いている時
+                if (swState === 1) { 
                     if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
 
-                    // GPSが有効な場合のみログ保存とライン判定を実行
                     if (lat !== 0 && lon !== 0) {
                         const curPos = { lat: lat, lon: lon, time: now };
                         
-                        // GPX保存用のログ配列に V10.6.1 互換形式で追加
                         gpsLog.push({ 
                             ...curPos, 
                             rpm: Math.round(currentRPM), 
@@ -205,31 +192,24 @@ async function bleConnect() {
                             temp: currentTemp 
                         });
 
-                        // 前回座標がある場合、ライン通過判定を行う
                         if (lastPos) {
-                            // 1. スタート/ゴールライン判定
-                            const hitSL = getIntersection(lastPos, curPos, lines.startLine);
+                            // スタートライン判定
+                            const hitSL = checkLineCross(lastPos, curPos, lines.startLine);
                             if (hitSL) {
-                                // 初回通過時に通過方向(validDirection)を自動記憶
-                                if (validDirection === null) validDirection = hitSL.dir;
-
-                                // 方向が一致し、かつクールダウン経過後ならラップ確定
-                                if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
-                                    processLap(hitSL.time);
+                                if (validDir === null) validDir = hitSL.dir;
+                                if (hitSL.dir === validDir && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
+                                    processLap(hitSL.time, true);
                                 }
                             }
 
-                            // 2. セクター判定 (S1〜S3)
+                            // セクター判定
                             if (lapStartTime > 0) {
                                 ['s1', 's2', 's3'].forEach(s => {
-                                    const hit = getIntersection(lastPos, curPos, lines[s + 'Line']);
+                                    const hit = checkLineCross(lastPos, curPos, lines[s + 'Line']);
                                     if (hit) {
-                                        // セクターごとの方向記憶
-                                        if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
-
-                                        if (hit.dir === sectorDirections[s]) {
+                                        if (sectorDirs[s] === null) sectorDirs[s] = hit.dir;
+                                        if (hit.dir === sectorDirs[s]) {
                                             const absTime = (hit.time - lapStartTime) / 1000;
-                                            // 各セクターの絶対時刻を記録して表示更新
                                             if (s === 's1' && s1_abs === 0) {
                                                 s1_abs = absTime; lastPassedSectorTime = absTime;
                                                 document.getElementById('s1_val').textContent = s1_abs.toFixed(3);
@@ -245,35 +225,28 @@ async function bleConnect() {
                                 });
                             }
                         }
-                        lastPos = curPos; // 次回判定用に座標を保存
+                        lastPos = curPos;
                     }
                 }
             }
         };
 
-        // 接続成功時の初期表示
         btn.style.backgroundColor = "var(--hrc-orange)";
         btn.style.color = "#000";
         btn.textContent = "CONNECTED";
 
     } catch (e) { 
-        console.error("BLE Connection Error:", e);
+        console.error("BLE Error:", e);
         this.classList.remove('active');
-        alert("BLE接続に失敗しました: " + e.message); 
+        alert("BLE接続失敗: " + e.message); 
     }
-}
-
-function updateSector(id, val) {
-    const el = document.getElementById(id + '_val');
-    el.textContent = val.toFixed(3);
-    el.parentElement.classList.add('sec-active');
 }
 
 function processLap(hitTime, isAuto) {
     const lapTimeMs = hitTime - (lapStartTime || startTime);
     const s4 = lastPassedSectorTime > 0 ? (lapTimeMs/1000 - lastPassedSectorTime).toFixed(3) : "--.---";
     const data = {
-        no: lapRecords.length + 1, time: lapTimeMs, max: maxSpeed,
+        no: lapRecords.length + 1, time: lapTimeMs, max: maxSpeedInLap,
         s1: document.getElementById('s1_val').textContent,
         s2: document.getElementById('s2_val').textContent,
         s3: document.getElementById('s3_val').textContent, s4: s4
@@ -285,24 +258,12 @@ function processLap(hitTime, isAuto) {
         <div class="lap-row ${r.time === best ? 'best-lap' : ''}">
             <span>L${r.no}</span><span>${timeFormat(r.time)}</span>
         </div>`).join('');
-    lapStartTime = hitTime; maxSpeed = 0;
+    lapStartTime = hitTime; maxSpeedInLap = 0;
     s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
     setTimeout(() => {
         ['s1_val','s2_val','s3_val'].forEach(id => document.getElementById(id).textContent = "--.---");
         document.querySelectorAll('.sec-box').forEach(el => el.classList.remove('sec-active'));
     }, 3000);
-}
-
-function saveGPX() {
-    if (gpsLog.length === 0) return;
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
-    gpsLog.forEach(p => {
-        gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.time).toISOString()}</time><speed>${(p.spd/3.6).toFixed(2)}</speed></trkpt>`;
-    });
-    gpx += `</trkseg></trk></gpx>`;
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `RaceLog_${Date.now()}.gpx`; a.click();
 }
 
 function tick() {
@@ -315,7 +276,7 @@ function tick() {
     }
     drawTacho(currentRPM);
     document.getElementById('speed_val').textContent = currentSpeedKmh;
-    document.getElementById('max_speed_val').textContent = maxSpeed;
+    document.getElementById('max_speed_val').textContent = maxSpeedInLap;
     document.getElementById('temp_val').textContent = currentTemp;
     requestAnimationFrame(tick);
 }
@@ -347,7 +308,7 @@ document.getElementById('btConnect').onclick = bleConnect;
 document.getElementById('startBtn').onclick = function() {
     if (swState !== 1) {
         swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsLog = [];
-        maxSpeed = 0; validDir = null; this.classList.add('active');
+        maxSpeedInLap = 0; validDir = null; this.classList.add('active');
         document.getElementById('gpxBtn').style.display = 'none';
     } else {
         swState = 2; this.classList.remove('active');
@@ -364,13 +325,13 @@ document.getElementById('historyBtn').onclick = () => {
     `).join('');
     document.getElementById('history-page').style.display = 'block';
 };
+
+// GPX保存 (V10.6.1 互換強化版)
 document.getElementById('gpxBtn').onclick = () => {
     if (gpsLog.length === 0) {
-        alert("保存する走行データがありません（GPS未捕捉またはタイマー未作動）。");
+        alert("保存する走行データがありません。");
         return;
     }
-
-    // --- A. ライン位置情報の抽出 (V10.6.1 互換) ---
     const getL = (k) => {
         const p1Lat = localStorage.getItem(k + 'P1Lat');
         if (!p1Lat) return "";
@@ -378,7 +339,6 @@ document.getElementById('gpxBtn').onclick = () => {
     };
     const lineData = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
 
-    // --- B. GPXヘッダー構築 ---
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="KLAP_DEGI_ULTIMATE" 
     xmlns="http://www.topografix.com/GPX/1/1" 
@@ -391,13 +351,10 @@ document.getElementById('gpxBtn').onclick = () => {
   <name>Race Log</name>
   <trkseg>`;
 
-    // --- C. 時刻の正規化 (V10.6.1 方式：2000年1月1日基準) ---
     const baseStartTime = gpsLog[0].time;
-
     gpsLog.forEach(p => {
-        // 解析ソフトが同期しやすいよう 2000-01-01T00:00:00Z 基準の相対時刻に変換
         const relativeTime = new Date(946684800000 + (p.time - baseStartTime)).toISOString();
-        const speedMS = (p.spd / 3.6).toFixed(2); // km/h -> m/s
+        const speedMS = (p.spd / 3.6).toFixed(2);
         const rpm = Math.round(p.rpm || 0);
         const temp = p.temp || 0;
 
@@ -419,17 +376,13 @@ document.getElementById('gpxBtn').onclick = () => {
 </trk>
 </gpx>`;
 
-    // --- D. ブラウザ互換ダウンロード処理 ---
     try {
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.style.display = 'none';
         a.href = url;
         a.download = `RaceLog_Ultimate_${Date.now()}.gpx`;
         document.body.appendChild(a);
-        
-        // iPhone/Safari等のポップアップブロック対策で遅延実行
         setTimeout(() => {
             a.click();
             setTimeout(() => {
@@ -437,8 +390,7 @@ document.getElementById('gpxBtn').onclick = () => {
                 URL.revokeObjectURL(url);
             }, 100);
         }, 50);
-
-        window.alert(`【解析ソフト互換形式】\n${gpsLog.length}地点のデータを保存しました。\n回転数(HR)・水温(TEMP)・速度・ライン情報が含まれています。`);
+        window.alert(`保存完了: ${gpsLog.length}地点`);
     } catch (e) {
         alert("保存エラー: " + e.message);
     }
