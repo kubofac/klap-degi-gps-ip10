@@ -168,22 +168,28 @@ async function connectBle() {
         const char = await service.getCharacteristic(PULSE_UUID);
         btn.classList.add('active');
         char.oncharacteristicvaluechanged = (e) => {
-            // 青点灯処理
+    const d = e.target.value;
+    if (d.byteLength >= 13) {
+        const latRaw = d.getInt32(0, true);
+        const lonRaw = d.getInt32(4, true);
+        const lat = latRaw / 1000000;
+        const lon = lonRaw / 1000000;
+
+        // 【修正ポイント】座標が0（未測位）でない場合のみ青点灯させる
+        if (latRaw !== 0 && lonRaw !== 0) {
             updateIndicator('btConnect', true);
             clearTimeout(bleGpsTimer);
             bleGpsTimer = setTimeout(() => updateIndicator('btConnect', false), 1500);
+        }
 
-            const d = e.target.value;
-            if (d.byteLength >= 13) {
-                const lat = d.getInt32(0, true) / 1000000;
-                const lon = d.getInt32(4, true) / 1000000;
-                currentSpeedKmh = d.getUint16(8, true);
-                currentTemp = d.getUint8(10);
-                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
-                document.getElementById('temp_val').textContent = currentTemp;
-                processPosition(lat, lon, Date.now());
-            }
-        };
+        currentSpeedKmh = d.getUint16(8, true);
+        currentTemp = d.getUint8(10);
+        currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+        
+        document.getElementById('temp_val').textContent = currentTemp;
+        processPosition(lat, lon, Date.now());
+    }
+};
         await char.startNotifications();
     } catch (e) { btn.classList.remove('active'); }
 }
