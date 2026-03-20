@@ -160,46 +160,42 @@ function handlePositionUpdate(currLat, currLon, now) {
 // 3. GPX保存処理（Bluefy用調整）
 
 function saveGPX() {
-    if (!gpsPoints || gpsPoints.length === 0) {
-        alert("データが0件です。");
-        return;
-    }
+    if (!gpsPoints || gpsPoints.length === 0) { alert("データがありません"); return; }
 
-    try {
-        // --- GPX文字列の生成ロジック (既存のものをそのまま使用) ---
-        const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
-        const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
-        const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
-        const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
-        const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
+    // --- GPX文字列生成 (既存のロジック) ---
+    let gpx = '<?xml version="1.0" ...'; // (ここにお使いのGPX生成コードを記述)
+    
+    // 履歴としてLocalStorageに保存（data.html用）
+    let history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
+    history.push({
+        id: Date.now(),
+        name: `Log_${new Date().getHours()}${new Date().getMinutes()}`,
+        data: gpx,
+        time: new Date().toLocaleString()
+    });
+    localStorage.setItem('gpx_sessions', JSON.stringify(history));
 
-        let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
-        gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${new Date().toLocaleTimeString()}</name><trkseg>\n`;
-        gpsPoints.forEach(p => {
-            const timeStr = new Date(p.time).toISOString();
-            gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${timeStr}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed><extensions><rpm>${Math.floor(p.rpm || 0)}</rpm></extensions></trkpt>\n`;
-        });
-        gpx += '</trkseg></trk></gpx>';
+    // --- 【重要】Bluefy対策：テキスト表示エリアを強制的に出す ---
+    const div = document.createElement('div');
+    div.style = "position:fixed;top:5%;left:5%;width:90%;height:90%;background:white;color:black;z-index:99999;padding:20px;border-radius:15px;box-shadow:0 0 20px rgba(0,0,0,0.5);overflow-y:auto;text-align:center;";
+    div.innerHTML = `
+        <h2 style="margin-top:0;">ログのコピー</h2>
+        <p style="font-size:14px;color:red;">Bluefyでは直接保存できないため、<br>下を<b>全選択してコピー</b>してください。</p>
+        <textarea id="copyTag" style="width:100%;height:50%;font-size:10px;font-family:monospace;">${gpx}</textarea>
+        <button onclick="copyAndClose()" style="width:100%;padding:15px;margin-top:10px;background:#28a745;color:white;font-weight:bold;border:none;border-radius:10px;">①コピーしてSafari用ページを開く</button>
+        <button onclick="this.parentElement.remove()" style="width:100%;padding:10px;margin-top:10px;background:#ccc;border:none;border-radius:10px;">閉じる</button>
+    `;
+    document.body.appendChild(div);
 
-        // --- 【ここからが変更点】履歴としてLocalStorageに保存 ---
-        let history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
-        
-        // 新しいセッション情報を追加
-        history.push({
-            id: Date.now(),
-            name: `Log_${new Date().getHours()}${new Date().getMinutes()}_${gpsPoints.length}pts`,
-            data: gpx,
-            time: new Date().toLocaleString()
-        });
-
-        // 保存（ブラウザの共通引き出しに入れる）
-        localStorage.setItem('gpx_sessions', JSON.stringify(history));
-
-        alert("【バックアップ完了】\nセッションを保存しました。\nSafariで管理アプリを開いて書き出してください。");
-
-    } catch (err) {
-        alert("保存エラー: " + err.message);
-    }
+    // コピー処理の関数（インラインで定義）
+    window.copyAndClose = function() {
+        const textArea = document.getElementById('copyTag');
+        textArea.select();
+        document.execCommand('copy');
+        alert("コピーしました！Safariで『export.html』を開いて貼り付けてください。");
+        // もし可能ならSafariへ誘導（iOSの仕様で開かない場合もあります）
+        window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
+    };
 }
 // --- 以下、補助関数 ---
 function initLines() {
