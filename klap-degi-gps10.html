@@ -32,7 +32,15 @@
 
         .data-panel { display: flex; flex-direction: column; gap: 15px; width: 100px; align-items: flex-end; }
         .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
-        .val { font-size: 38px; font-weight: 900; line-height: 0.8; text-shadow: 2px 2px 8px #000; }
+  .val { 
+    font-size: 38px; 
+    font-weight: 900; 
+    line-height: 0.8; 
+    text-shadow: 2px 2px 8px #000;
+    text-align: right;    /* テキストを右寄せ */
+    width: 100%;          /* 親要素の幅いっぱいに広げて端に寄せる */
+    display: block;       /* 幅の指定を有効にする */
+}
 
         footer { height: 55px; display: flex; gap: 2px; padding: 4px; background: #000; border-top: 1px solid #333; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); z-index: 100; }
         button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 9px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
