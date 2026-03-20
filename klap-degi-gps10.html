@@ -159,56 +159,55 @@ function handlePositionUpdate(currLat, currLon, now) {
 
 // 3. GPX保存処理（Bluefy用調整）
 function saveGPX() {
-    console.log("GPX Save Start. Points:", gpsPoints.length);
-    
     if (!gpsPoints || gpsPoints.length === 0) {
         alert("データが0件です。走行ログが記録されていません。");
         return;
     }
 
     try {
-        // ラインデータの構築
+        // --- 1. GPXデータの構築 (ここは変更なし) ---
         const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
         const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
         const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
         const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
         const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
 
-        // GPX生成
         let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
         gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${Date.now()}</name><trkseg>\n`;
-        
         gpsPoints.forEach(p => {
             const timeStr = new Date(p.time).toISOString();
             gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${timeStr}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed><extensions><rpm>${Math.floor(p.rpm || 0)}</rpm></extensions></trkpt>\n`;
         });
         gpx += '</trkseg></trk></gpx>';
 
-        // 【重要】iOS/Bluefyで最も成功率の高い「Blob + URL」方式
+        // --- 2. 保存処理の変更 (ここからが window.open 導入部) ---
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
         const url = window.URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `RaceLog_${Date.now()}.gpx`;
-        
-        document.body.appendChild(a);
-        a.click();
-        
-        // 1秒後に後片付け
-        setTimeout(() => {
-            window.URL.revokeObjectURL(url);
+
+        // 方法A: 新しいウィンドウ/タブで開く (iOS/Bluefyで有効な場合が多い)
+        const newWin = window.open(url, '_blank');
+
+        // もしポップアップブロック等で新しいウィンドウが開かなかった場合のバックアップ策
+        if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `RaceLog_${Date.now()}.gpx`;
+            document.body.appendChild(a);
+            a.click();
             document.body.removeChild(a);
-            alert("保存ダイアログを確認してください。出ない場合はポップアップブロックを確認！");
-        }, 1000);
+        }
+
+        // --- 3. 終了通知 ---
+        setTimeout(() => {
+            // URLリソースを解放 (少し時間を置いてから)
+            window.URL.revokeObjectURL(url);
+            alert("保存・ダウンロード画面を確認してください。\n画面が白くなった場合は『共有ボタン』からファイル保存を選択してください。");
+        }, 1500);
 
     } catch (err) {
-        // エラー内容を画面に強制表示
         alert("システムエラー発生: " + err.message);
     }
 }
-
 // --- 以下、補助関数 ---
 function initLines() {
     ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
