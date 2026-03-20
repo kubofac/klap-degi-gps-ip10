@@ -125,88 +125,80 @@ function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.flo
 async function connectBle() {
     const btn = document.getElementById('btConnect');
     const debugEl = document.getElementById('debug-info');
-    if(debugEl) debugEl.innerHTML = "BLE: REQUESTING...";
-
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
-        if(debugEl) debugEl.innerHTML = "BLE: CONNECTING TO GATT...";
-        
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         
         btn.classList.add('active');
-        if(debugEl) debugEl.innerHTML = "BLE: CONNECTED. WAITING NOTIFY...";
 
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
             
-            // データが届いたら即座に表示を「受信中」に
-            if (debugEl) debugEl.innerHTML = `RECEIVING: ${d.byteLength} BYTES`;
+            // --- 超緊急デバッグ：これが動けば通信は「絶対」に来ている ---
+            if (debugEl) {
+                const rLat = d.getInt32(0, true);
+                const rLon = d.getInt32(4, true);
+                debugEl.innerHTML = `
+                    <div style="color:#0f0">[RAW DATA RECEIVED]</div>
+                    RAW_LAT: ${rLat}<br>
+                    RAW_LON: ${rLon}<br>
+                    BYTES: ${d.byteLength}
+                `;
+            }
 
             if (d.byteLength >= 13) {
-                const latRaw = d.getInt32(0, true);
-                const lonRaw = d.getInt32(4, true);
-                const lat = latRaw / 1000000;
-                const lon = lonRaw / 1000000;
-
+                const lat = d.getInt32(0, true) / 1000000;
+                const lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
-                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+                currentRPM = (d.getUint16(11, true) * 60) / (pulsePerRev || 1);
 
                 document.getElementById('temp_val').textContent = currentTemp;
 
-                // 座標0でも更新をかける
+                // ここで下の関数を呼び出す
                 processPosition(lat, lon, Date.now());
-
-                if (latRaw !== 0 && lonRaw !== 0) {
-                    updateIndicator('btConnect', true);
-                    clearTimeout(bleGpsTimer);
-                    bleGpsTimer = setTimeout(() => updateIndicator('btConnect', false), 1500);
-                }
             }
         };
         await char.startNotifications();
-        if(debugEl) debugEl.innerHTML = "BLE: NOTIFICATIONS STARTED";
+        if(debugEl) debugEl.innerHTML = "WAITING FOR FIRST PACKET...";
     } catch (e) { 
-        console.error(e);
-        if(debugEl) debugEl.innerHTML = `<span style="color:red;">ERR: ${e.message}</span>`;
-        btn.classList.remove('active'); 
+        if(debugEl) debugEl.innerHTML = "BLE ERROR: " + e.message;
     }
 }
 
 // --- 座標処理 & デバッグ表示 ---
 function processPosition(lat, lon, time) {
     const debugEl = document.getElementById('debug-info');
-    if (debugEl) {
-        const isZero = (lat === 0 && lon === 0);
-        debugEl.innerHTML = `
-            <div style="color: #0f0; border-bottom: 1px solid #444; margin-bottom: 3px;">[GPS MONITOR]</div>
-            <span style="color:${isZero ? 'orange' : '#0ff'}; font-weight:bold;">${isZero ? 'SEARCHING SATELLITES' : 'FIXED / READY'}</span><br>
-            LAT: ${lat.toFixed(6)}<br>
-            LON: ${lon.toFixed(6)}<br>
-            SPD: ${currentSpeedKmh.toFixed(1)} | RPM: ${Math.round(currentRPM)}<br>
-            PTS: ${gpsPoints.length} | SW: ${swState}
-        `;
-    }
+    if (!debugEl) return;
 
-    if (swState !== 1 || (lat === 0 && lon === 0)) return;
+    const isZero = (lat === 0 && lon === 0);
+    
+    // 画面左上に強制的に情報を出す
+    debugEl.innerHTML = `
+        <div style="color: #0f0; border-bottom: 1px solid #444;">[GPS MONITOR]</div>
+        <span style="color:${isZero ? 'orange' : '#0ff'}; font-weight:bold;">
+            ${isZero ? '🛰 SEARCHING SATELLITES' : '✅ GPS FIXED / READY'}
+        </span><br>
+        LAT: <span style="color:#fff">${lat.toFixed(6)}</span><br>
+        LON: <span style="color:#fff">${lon.toFixed(6)}</span><br>
+        SPD: ${currentSpeedKmh} km/h | RPM: ${Math.round(currentRPM)}<br>
+        PTS: ${gpsPoints.length} | SW: ${swState}
+    `;
+
+    // 0の時や計測中でない時は、保存処理だけスキップ
+    if (swState !== 1 || isZero) return;
 
     if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
-    const cur = { lat, lon, time, rpm: currentRPM, speed: currentSpeedKmh };
-    gpsPoints.push(cur);
+    gpsPoints.push({ lat, lon, time, rpm: currentRPM, speed: currentSpeedKmh });
 
-    // --- ラップ判定 (省略せず記述) ---
-    if (lastPos && lines.startLine) {
-        const hitSL = getIntersection(lastPos, cur, lines.startLine);
-        if (hitSL) {
-            if (validDirection === null) validDirection = hitSL.dir;
-            if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
-                processLap(hitSL.time, true);
-            }
-        }
+    // ラップ判定ロジック（簡易版で動作確認）
+    if (lastPos && lines && lines.startLine) {
+        const hit = getIntersection(lastPos, {lat, lon, time}, lines.startLine);
+        if (hit) processLap(hit.time, true);
     }
-    lastPos = cur;
+    lastPos = {lat, lon, time};
 }
 
 // --- その他の関数 (描画・判定・ラップ処理) ---
