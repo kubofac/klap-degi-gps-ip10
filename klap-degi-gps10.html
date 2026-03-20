@@ -112,17 +112,16 @@ let watchId = null, wakeLock = null, intGpsTimer = null, bleGpsTimer = null;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- インジケーター制御 ---
 function updateIndicator(btnId, active) {
     const btn = document.getElementById(btnId);
+    if (!btn) return;
     if (active) {
-        btn.style.background = "#004098"; // 受信中：青
+        btn.style.background = "#004098";
     } else {
         btn.style.background = btn.classList.contains('active') ? "var(--hrc-red)" : "#1a1a1a";
     }
 }
 
-// --- 判定ロジック ---
 function getIntersection(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -138,7 +137,6 @@ function getIntersection(p1, p2, line) {
     return null;
 }
 
-// --- 内蔵GPS ---
 async function toggleIntGps() {
     const btn = document.getElementById('intGpsBtn');
     if (watchId !== null) {
@@ -150,19 +148,17 @@ async function toggleIntGps() {
     btn.classList.add('active');
     if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
     watchId = navigator.geolocation.watchPosition(pos => {
-        // 青点灯処理
         updateIndicator('intGpsBtn', true);
         clearTimeout(intGpsTimer);
         intGpsTimer = setTimeout(() => updateIndicator('intGpsBtn', false), 1500);
-
         currentSpeedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
         processPosition(pos.coords.latitude, pos.coords.longitude, Date.now());
     }, e => console.error(e), { enableHighAccuracy: true });
 }
 
-// --- BLE ---
 async function connectBle() {
     const btn = document.getElementById('btConnect');
+    const debugEl = document.getElementById('debug-info');
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
@@ -173,32 +169,24 @@ async function connectBle() {
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
             
-            // --- デバッグ用：データが届いているか確認 ---
-            const debugEl = document.getElementById('debug-info');
-            if (debugEl) {
-                // 届いたバイト数を表示（13のはず）
-                debugEl.innerHTML = `RECEIVING: ${d.byteLength} bytes...`;
-            }
+            // 通信受信の強制表示
+            if (debugEl) debugEl.innerHTML = "RECEIVING DATA...";
 
             if (d.byteLength >= 13) {
-                // ESP32のパケット構造に合わせて抽出
                 const latRaw = d.getInt32(0, true);
                 const lonRaw = d.getInt32(4, true);
                 const lat = latRaw / 1000000;
                 const lon = lonRaw / 1000000;
 
-                // 共通変数に格納
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
                 currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
 
-                // UI更新
                 document.getElementById('temp_val').textContent = currentTemp;
 
-                // 座標が 0 であってもデバッグ版 processPosition を呼び出す
+                // 座標が 0 であってもデバッグ更新のために呼び出す
                 processPosition(lat, lon, Date.now());
 
-                // 青点灯処理（座標が0以外の時のみ）
                 if (latRaw !== 0 && lonRaw !== 0) {
                     updateIndicator('btConnect', true);
                     clearTimeout(bleGpsTimer);
@@ -209,42 +197,32 @@ async function connectBle() {
         await char.startNotifications();
     } catch (e) { 
         console.error(e);
+        if(debugEl) debugEl.innerHTML = "BLE ERROR: " + e.message;
         btn.classList.remove('active'); 
     }
 }
+
 function processPosition(lat, lon, time) {
     const debugEl = document.getElementById('debug-info');
-    
-    // --- 1. 超詳細デバッグ表示 (受信した生の値をそのまま出す) ---
     if (debugEl) {
         let statusColor = (lat === 0 && lon === 0) ? "orange" : "#0ff";
-        let statusText = (lat === 0 && lon === 0) ? "GPS SEARCHING (WAITing 0.00)" : "GPS FIXED (READY)";
-        
+        let statusText = (lat === 0 && lon === 0) ? "GPS SEARCHING" : "GPS FIXED";
         debugEl.innerHTML = `
             <div style="color: #0f0; border-bottom: 1px solid #444; margin-bottom: 5px;">[BLE/GPS MONITOR]</div>
             <span style="color:${statusColor}; font-weight:bold;">${statusText}</span><br>
-            LAT: <span style="color:#fff">${lat.toFixed(6)}</span><br>
-            LON: <span style="color:#fff">${lon.toFixed(6)}</span><br>
-            SPD: ${currentSpeedKmh} km/h | TEMP: ${currentTemp}℃<br>
-            RPM: ${Math.round(currentRPM)} | PTS: ${gpsPoints.length}<br>
-            <div style="font-size:10px; color:#888; margin-top:5px;">
-                TIME: ${new Date(time).toLocaleTimeString()}.${time % 1000}<br>
-                SW_STATE: ${swState} (1=REC)
-            </div>
+            LAT: ${lat.toFixed(6)}<br>
+            LON: ${lon.toFixed(6)}<br>
+            SPD: ${currentSpeedKmh.toFixed(1)} | RPM: ${Math.round(currentRPM)}<br>
+            PTS: ${gpsPoints.length} | SW: ${swState}
         `;
     }
 
-    // --- 2. 保存・ラップ判定のガード条件 ---
-    // 「計測中でない」 または 「座標が0（未測位）」 の場合は、ここから先（保存処理）へ進ませない
-    if (swState !== 1) return;
-    if (lat === 0 && lon === 0) return; 
+    if (swState !== 1 || (lat === 0 && lon === 0)) return;
 
-    // --- 3. 走行データの記録 (ここから先は有効なデータのみ) ---
     if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
     const cur = { lat, lon, time, rpm: currentRPM, speed: currentSpeedKmh };
     gpsPoints.push(cur);
 
-    // --- 4. ラップ・セクター判定ロジック ---
     if (lastPos && lines.startLine) {
         const hitSL = getIntersection(lastPos, cur, lines.startLine);
         if (hitSL) {
@@ -253,14 +231,11 @@ function processPosition(lat, lon, time) {
                 processLap(hitSL.time, true);
             }
         }
-
-        // セクター判定
         ['s1', 's2', 's3'].forEach(s => {
             const hit = getIntersection(lastPos, cur, lines[s + 'Line']);
             if (hit && (sectorDirections[s] === null || hit.dir === sectorDirections[s])) {
                 if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
                 const absTime = (hit.time - lapStartTime) / 1000;
-                
                 if (s === 's1' && s1_abs === 0) {
                     s1_abs = absTime; lastPassedSectorTime = absTime;
                     document.getElementById('s1_val').textContent = s1_abs.toFixed(3);
@@ -274,10 +249,9 @@ function processPosition(lat, lon, time) {
             }
         });
     }
-
-    // 次回判定用に保存
     lastPos = cur;
 }
+
 function processLap(hitTime, useFreeze) {
     const lapTimeMs = hitTime - (lapStartTime || startTime);
     const lapTimeSec = lapTimeMs / 1000;
@@ -294,9 +268,9 @@ function processLap(hitTime, useFreeze) {
     setTimeout(() => { if(swState === 1) ['s1_val','s2_val','s3_val'].forEach(id => document.getElementById(id).textContent = "--.---"); }, 3000);
 }
 
-// --- UI / Main Loop ---
 function drawTacho(rpm) {
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
     ctx.clearRect(0, 0, w, h);
     const segments = 75, active = Math.floor((rpm / 14000) * segments);
     const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
@@ -328,12 +302,18 @@ function mainLoop() {
     requestAnimationFrame(mainLoop);
 }
 
-// --- Events ---
+function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
+
+// イベント登録
 document.getElementById('intGpsBtn').onclick = toggleIntGps;
 document.getElementById('btConnect').onclick = connectBle;
 document.getElementById('startBtn').onclick = function() {
-    if (swState !== 1) { swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; this.classList.add('active'); document.getElementById('gpxBtn').style.display='none'; }
-    else { swState = 2; this.classList.remove('active'); document.getElementById('gpxBtn').style.display='block'; }
+    if (swState !== 1) { 
+        swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; 
+        this.classList.add('active'); document.getElementById('gpxBtn').style.display='none'; 
+    } else { 
+        swState = 2; this.classList.remove('active'); document.getElementById('gpxBtn').style.display='block'; 
+    }
 };
 document.getElementById('lapBtn').onclick = () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); };
 document.getElementById('historyBtn').onclick = () => {
@@ -342,38 +322,18 @@ document.getElementById('historyBtn').onclick = () => {
     document.getElementById('history-body').innerHTML = lapRecords.map(r => `<tr style="${r.time === bT ? 'background:rgba(228,0,43,0.15);' : ''}"><td>${r.no}</td><td>${r.s1}</td><td>${r.s2}</td><td>${r.s3}</td><td>${r.s4}</td><td style="${r.time===bT?'color:var(--hrc-red);':''}">${timeFormat(r.time)}</td><td>${r.max}</td><td>${r.maxRpm}</td></tr>`).join('');
     document.getElementById('history-page').style.display = 'block';
 };
-    document.getElementById('gpxBtn').onclick = () => {
-    if (gpsPoints.length === 0) {
-        alert("保存するGPSデータがありません。");
-        return;
-    }
-
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">
-<trk><name>Track Log</name><trkseg>`;
-
+document.getElementById('gpxBtn').onclick = () => {
+    if (gpsPoints.length === 0) { alert("保存するGPSデータがありません。"); return; }
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Track Log</name><trkseg>`;
     gpsPoints.forEach(p => {
-        gpx += `
-<trkpt lat="${p.lat}" lon="${p.lon}">
-    <time>${new Date(p.time).toISOString()}</time>
-    <extensions>
-        <speed>${(p.speed / 3.6).toFixed(2)}</speed>
-        <hr>${Math.round(p.rpm)}</hr>
-    </extensions>
-</trkpt>`;
+        gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.time).toISOString()}</time><extensions><speed>${(p.speed / 3.6).toFixed(2)}</speed><hr>${Math.round(p.rpm)}</hr></extensions></trkpt>`;
     });
-
-    gpx += `\n</trkseg></trk></gpx>`;
-
+    gpx += `</trkseg></trk></gpx>`;
     const blob = new Blob([gpx], { type: 'application/gpx+xml' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `log_${new Date().toISOString().replace(/[:.]/g, '-')}.gpx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `log_${new Date().getTime()}.gpx`; a.click();
 };
-function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
+
 window.onload = () => {
     ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
         const lat = localStorage.getItem(key + 'P1Lat');
