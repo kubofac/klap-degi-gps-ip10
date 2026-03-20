@@ -165,7 +165,7 @@ function saveGPX() {
     }
 
     try {
-        // --- 1. GPXデータの構築 (ここは変更なし) ---
+        // --- 1. GPXデータの構築 (ここは既存のロジックと同じ) ---
         const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
         const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
         const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
@@ -180,29 +180,23 @@ function saveGPX() {
         });
         gpx += '</trkseg></trk></gpx>';
 
-        // --- 2. 保存処理の変更 (ここからが window.open 導入部) ---
+        // --- 2. 強制ダウンロード処理 ---
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
         const url = window.URL.createObjectURL(blob);
 
-        // 方法A: 新しいウィンドウ/タブで開く (iOS/Bluefyで有効な場合が多い)
-        const newWin = window.open(url, '_blank');
+        // 真っ白画面対策： location.href を使って「この場所をダウンロードしろ」と直接命令
+        location.href = url;
 
-        // もしポップアップブロック等で新しいウィンドウが開かなかった場合のバックアップ策
-        if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `RaceLog_${Date.now()}.gpx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-
-        // --- 3. 終了通知 ---
+        // 2秒待って反応がない場合、または「何も起きない」時のためのバックアップ
         setTimeout(() => {
-            // URLリソースを解放 (少し時間を置いてから)
+            if (confirm("保存画面（または共有メニュー）は出ましたか？\n出なかった場合はOKを押してください。\n強制的にデータをエンコードして開き直します。")) {
+                const encodedGpx = window.btoa(unescape(encodeURIComponent(gpx)));
+                // dataスキームで新しいタブとして開く
+                window.open('data:application/gpx+xml;base64,' + encodedGpx, '_blank');
+            }
+            // URLリソースを解放
             window.URL.revokeObjectURL(url);
-            alert("保存・ダウンロード画面を確認してください。\n画面が白くなった場合は『共有ボタン』からファイル保存を選択してください。");
-        }, 1500);
+        }, 2000);
 
     } catch (err) {
         alert("システムエラー発生: " + err.message);
