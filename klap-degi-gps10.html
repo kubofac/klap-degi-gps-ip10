@@ -284,6 +284,37 @@ document.getElementById('historyBtn').onclick = () => {
     document.getElementById('history-body').innerHTML = lapRecords.map(r => `<tr style="${r.time === bT ? 'background:rgba(228,0,43,0.15);' : ''}"><td>${r.no}</td><td>${r.s1}</td><td>${r.s2}</td><td>${r.s3}</td><td>${r.s4}</td><td style="${r.time===bT?'color:var(--hrc-red);':''}">${timeFormat(r.time)}</td><td>${r.max}</td><td>${r.maxRpm}</td></tr>`).join('');
     document.getElementById('history-page').style.display = 'block';
 };
+    document.getElementById('gpxBtn').onclick = () => {
+    if (gpsPoints.length === 0) {
+        alert("保存するGPSデータがありません。");
+        return;
+    }
+
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">
+<trk><name>Track Log</name><trkseg>`;
+
+    gpsPoints.forEach(p => {
+        gpx += `
+<trkpt lat="${p.lat}" lon="${p.lon}">
+    <time>${new Date(p.time).toISOString()}</time>
+    <extensions>
+        <speed>${(p.speed / 3.6).toFixed(2)}</speed>
+        <hr>${Math.round(p.rpm)}</hr>
+    </extensions>
+</trkpt>`;
+    });
+
+    gpx += `\n</trkseg></trk></gpx>`;
+
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `log_${new Date().toISOString().replace(/[:.]/g, '-')}.gpx`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
 window.onload = () => {
     ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
