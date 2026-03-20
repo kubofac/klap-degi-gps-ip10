@@ -159,52 +159,53 @@ function handlePositionUpdate(currLat, currLon, now) {
 
 // 3. GPX保存処理（Bluefy用調整）
 function saveGPX() {
-    if (gpsPoints.length === 0) {
-        alert("データがありません（PKTが0です）");
+    console.log("GPX Save Start. Points:", gpsPoints.length);
+    
+    if (!gpsPoints || gpsPoints.length === 0) {
+        alert("データが0件です。走行ログが記録されていません。");
         return;
     }
 
     try {
-        // 1. 解析ツール(V12.1.4)用のメタデータ作成
-        const sl = lines.startLine ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
-        const s1 = lines.s1Line ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
-        const s2 = lines.s2Line ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
-        const s3 = lines.s3Line ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
+        // ラインデータの構築
+        const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
+        const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
+        const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
+        const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
         const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
 
-        // 2. GPX文字列の生成
+        // GPX生成
         let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
-        gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${new Date().toLocaleTimeString()}</name><trkseg>\n`;
+        gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${Date.now()}</name><trkseg>\n`;
+        
         gpsPoints.forEach(p => {
-            gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.time).toISOString()}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed><extensions><rpm>${Math.floor(p.rpm)}</rpm></extensions></trkpt>\n`;
+            const timeStr = new Date(p.time).toISOString();
+            gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${timeStr}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed><extensions><rpm>${Math.floor(p.rpm || 0)}</rpm></extensions></trkpt>\n`;
         });
         gpx += '</trkseg></trk></gpx>';
 
-        // 3. ★iOS/Bluefy対策：Data URLスキームを利用
-        // 文字列をBase64変換して、ブラウザに「これはファイルですよ」と強く主張します
-        const encodedGpx = window.btoa(unescape(encodeURIComponent(gpx)));
-        const dataUrl = 'data:application/gpx+xml;base64,' + encodedGpx;
-
-        // 4. 疑似クリックで保存発動
-        const fileName = `RaceLog_${Date.now()}.gpx`;
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = fileName;
+        // 【重要】iOS/Bluefyで最も成功率の高い「Blob + URL」方式
+        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+        const url = window.URL.createObjectURL(blob);
         
-        // iOS Safari/Bluefyでは、DOMに追加してからクリックしないと反応しない場合があります
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `RaceLog_${Date.now()}.gpx`;
+        
         document.body.appendChild(a);
         a.click();
         
-        // 5. 念のためバックアップ（以前のコピー用画面も一瞬出すが、基本は保存ダイアログ優先）
+        // 1秒後に後片付け
         setTimeout(() => {
+            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            // 保存ダイアログが出なかった場合のみ、手動コピー画面が見えるようにする
-            const txtArea = document.getElementById('gpx-text');
-            if (txtArea) txtArea.value = gpx; 
-        }, 300);
+            alert("保存ダイアログを確認してください。出ない場合はポップアップブロックを確認！");
+        }, 1000);
 
-    } catch (e) {
-        alert("保存処理中にエラーが発生しました: " + e.message);
+    } catch (err) {
+        // エラー内容を画面に強制表示
+        alert("システムエラー発生: " + err.message);
     }
 }
 
