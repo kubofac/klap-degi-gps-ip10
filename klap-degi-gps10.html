@@ -55,7 +55,9 @@
     </style>
 </head>
 <body>
-
+<div id="debug-info" style="position: fixed; top: env(safe-area-inset-top); left: 10px; z-index: 3000; font-family: monospace; font-size: 12px; color: #0f0; background: rgba(0,0,0,0.5); pointer-events: none; line-height: 1.2; padding: 5px;">
+    DEBUG: GPS WAIT...
+</div>
 <div id="dashboard">
     <canvas id="canvas"></canvas>
     <div class="main-ui-container">
@@ -195,28 +197,67 @@ async function connectBle() {
 }
 
 function processPosition(lat, lon, time) {
+    // --- 1. デバッグ表示の更新 (常に実行) ---
+    const debugEl = document.getElementById('debug-info');
+    if (debugEl) {
+        debugEl.innerHTML = `
+            <div style="color: #0f0; font-weight: bold;">[DEBUG GPS]</div>
+            LAT: ${lat.toFixed(6)}<br>
+            LON: ${lon.toFixed(6)}<br>
+            SPD: ${currentSpeedKmh.toFixed(1)} km/h<br>
+            PTS: ${gpsPoints.length}<br>
+            STATE: ${swState === 1 ? '<span style="color:red;">RECORDING</span>' : 'STOP'}
+        `;
+    }
+
+    // --- 2. 計測中でなければここで終了 (保存・判定しない) ---
     if (swState !== 1) return;
+
+    // --- 3. 走行データの記録 (GPX用) ---
     if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
     const cur = { lat, lon, time, rpm: currentRPM, speed: currentSpeedKmh };
     gpsPoints.push(cur);
 
+    // --- 4. ラップ・セクター判定ロジック ---
     if (lastPos && lines.startLine) {
+        // スタート/フィニッシュライン通過判定
         const hitSL = getIntersection(lastPos, cur, lines.startLine);
         if (hitSL) {
             if (validDirection === null) validDirection = hitSL.dir;
-            if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) processLap(hitSL.time, true);
+            // 進行方向が一致し、かつクールダウン時間を経過しているか
+            if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
+                processLap(hitSL.time, true);
+            }
         }
+
+        // 各セクターライン(S1-S3)の通過判定
         ['s1', 's2', 's3'].forEach(s => {
             const hit = getIntersection(lastPos, cur, lines[s + 'Line']);
             if (hit && (sectorDirections[s] === null || hit.dir === sectorDirections[s])) {
                 if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
+                
                 const absTime = (hit.time - lapStartTime) / 1000;
-                if (s === 's1' && s1_abs === 0) { s1_abs = absTime; lastPassedSectorTime = absTime; document.getElementById('s1_val').textContent = s1_abs.toFixed(3); }
-                else if (s === 's2' && s2_abs === 0) { s2_abs = absTime; lastPassedSectorTime = absTime; document.getElementById('s2_val').textContent = (s1_abs > 0 ? s2_abs - s1_abs : s2_abs).toFixed(3); }
-                else if (s === 's3' && s3_abs === 0) { s3_abs = absTime; lastPassedSectorTime = absTime; document.getElementById('s3_val').textContent = (s2_abs > 0 ? s3_abs - s2_abs : s3_abs).toFixed(3); }
+                
+                if (s === 's1' && s1_abs === 0) { 
+                    s1_abs = absTime; 
+                    lastPassedSectorTime = absTime; 
+                    document.getElementById('s1_val').textContent = s1_abs.toFixed(3); 
+                }
+                else if (s === 's2' && s2_abs === 0) { 
+                    s2_abs = absTime; 
+                    lastPassedSectorTime = absTime; 
+                    document.getElementById('s2_val').textContent = (s1_abs > 0 ? s2_abs - s1_abs : s2_abs).toFixed(3); 
+                }
+                else if (s === 's3' && s3_abs === 0) { 
+                    s3_abs = absTime; 
+                    lastPassedSectorTime = absTime; 
+                    document.getElementById('s3_val').textContent = (s2_abs > 0 ? s3_abs - s2_abs : s3_abs).toFixed(3); 
+                }
             }
         });
     }
+
+    // 次回判定用に現在の座標を保存
     lastPos = cur;
 }
 
