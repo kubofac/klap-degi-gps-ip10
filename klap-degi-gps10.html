@@ -112,6 +112,7 @@ let watchId = null, wakeLock = null, intGpsTimer = null, bleGpsTimer = null;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
+// インジケーター制御
 function updateIndicator(btnId, active) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -122,6 +123,7 @@ function updateIndicator(btnId, active) {
     }
 }
 
+// 交差判定
 function getIntersection(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -137,6 +139,7 @@ function getIntersection(p1, p2, line) {
     return null;
 }
 
+// 内蔵GPS
 async function toggleIntGps() {
     const btn = document.getElementById('intGpsBtn');
     if (watchId !== null) {
@@ -146,7 +149,7 @@ async function toggleIntGps() {
         return;
     }
     btn.classList.add('active');
-    if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    if ("wakeLock" in navigator) try { wakeLock = await navigator.wakeLock.request("screen"); } catch(e){}
     watchId = navigator.geolocation.watchPosition(pos => {
         updateIndicator('intGpsBtn', true);
         clearTimeout(intGpsTimer);
@@ -156,6 +159,7 @@ async function toggleIntGps() {
     }, e => console.error(e), { enableHighAccuracy: true });
 }
 
+// BLE通信
 async function connectBle() {
     const btn = document.getElementById('btConnect');
     const debugEl = document.getElementById('debug-info');
@@ -168,9 +172,8 @@ async function connectBle() {
 
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
-            
-            // 通信受信の強制表示
-            if (debugEl) debugEl.innerHTML = "RECEIVING DATA...";
+            // 受信した瞬間にデバッグ表示を書き換え
+            if (debugEl) debugEl.innerHTML = `RECEIVING: ${d.byteLength} bytes...`;
 
             if (d.byteLength >= 13) {
                 const latRaw = d.getInt32(0, true);
@@ -184,7 +187,7 @@ async function connectBle() {
 
                 document.getElementById('temp_val').textContent = currentTemp;
 
-                // 座標が 0 であってもデバッグ更新のために呼び出す
+                // 座標が 0 でもデバッグ更新のために呼ぶ
                 processPosition(lat, lon, Date.now());
 
                 if (latRaw !== 0 && lonRaw !== 0) {
@@ -202,6 +205,7 @@ async function connectBle() {
     }
 }
 
+// 座標処理（デバッグ表示含む）
 function processPosition(lat, lon, time) {
     const debugEl = document.getElementById('debug-info');
     if (debugEl) {
@@ -304,7 +308,7 @@ function mainLoop() {
 
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
 
-// イベント登録
+// --- イベント登録（ここにまとめました） ---
 document.getElementById('intGpsBtn').onclick = toggleIntGps;
 document.getElementById('btConnect').onclick = connectBle;
 document.getElementById('startBtn').onclick = function() {
