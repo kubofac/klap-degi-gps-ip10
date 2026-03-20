@@ -325,18 +325,93 @@ document.getElementById('historyBtn').onclick = () => {
     document.getElementById('history-page').style.display = 'block';
 };
 
+// --- GPX保存ボタンのロジック修正 ---
 document.getElementById('gpxBtn').onclick = () => {
-    if (gpsPoints.length === 0) return;
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
-    const base = gpsPoints[0].time;
-    gpsPoints.forEach(p => {
-        const relTime = new Date(946684800000 + (p.time - base)).toISOString();
-        gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${relTime}</time><speed>${(p.speed/3.6).toFixed(2)}</speed></trkpt>`;
-    });
-    gpx += `</trkseg></trk></gpx>`;
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Log_${Date.now()}.gpx`; a.click();
+    // 1. データがあるか確認
+    if (gpsPoints.length === 0) {
+        alert("保存する走行データがありません（GPS未捕捉または未走行）");
+        return;
+    }
+
+    try {
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">
+<metadata><name>RaceLog_${Date.now()}</name></metadata>
+<trk><name>Track 1</name><trkseg>`;
+        
+        const base = gpsPoints[0].time;
+        
+        gpsPoints.forEach(p => {
+            // ISO 8601形式の時刻を作成
+            const relTime = new Date(946684800000 + (p.time - base)).toISOString();
+            gpx += `
+<trkpt lat="${p.lat}" lon="${p.lon}">
+    <time>${relTime}</time>
+    <speed>${(p.speed / 3.6).toFixed(2)}</speed>
+    <extensions>
+        <rpm>${Math.round(p.rpm)}</rpm>
+    </extensions>
+</trkpt>`;
+        });
+        
+        gpx += `</trkseg></trk></gpx>`;
+
+        // 2. Blobの作成とダウンロード処理
+        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `RaceLog_${Date.now()}.gpx`;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        // 3. 後片付け
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 100);
+
+    } catch (e) {
+        alert("GPX生成エラー: " + e.message);
+    }
 };
+
+// --- handlePositionUpdate内の蓄積ロジックを確実にする ---
+function handlePositionUpdate(currLat, currLon, now) {
+    if (currLat === 0 && currLon === 0) return;
+
+    document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
+    
+    // タイマー動作中(swState === 1)のみ配列に追加
+    if (swState === 1) {
+        if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = currentSpeedKmh;
+        
+        const cur = { 
+            lat: currLat, 
+            lon: currLon, 
+            time: now, 
+            rpm: currentRPM, 
+            speed: currentSpeedKmh 
+        };
+        
+        gpsPoints.push(cur); // ここでデータが溜まる
+
+        // --- 以下、ラップ判定ロジック（既存のまま） ---
+        if (lastPos) {
+            const hitSL = getIntersection(lastPos, cur, lines.startLine);
+            if (hitSL) {
+                if (validDirection === null) validDirection = hitSL.dir;
+                if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
+                    processLap(hitSL.time, true);
+                }
+            }
+            // セクター判定...
+        }
+        lastPos = cur;
+    }
+}
 
 function mainLoop() {
     const now = Date.now();
