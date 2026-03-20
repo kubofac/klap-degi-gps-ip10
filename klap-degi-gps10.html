@@ -194,13 +194,14 @@ async function ble() {
     } catch (e) { alert("BLE Error: " + e.message); }
 }
 
-// ★一本化した位置情報処理ロジック
+// 一本化した位置情報処理ロジック
 function handlePositionUpdate(currLat, currLon, now) {
     if (currLat === 0 && currLon === 0) return;
     document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
     
     if (swState === 1) {
         if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = currentSpeedKmh;
+        // データ蓄積
         const cur = { lat: currLat, lon: currLon, time: now, rpm: currentRPM, speed: currentSpeedKmh };
         gpsPoints.push(cur);
 
@@ -254,24 +255,36 @@ document.getElementById('historyBtn').onclick = () => {
     document.getElementById('history-page').style.display = 'block';
 };
 
-// ★GPX保存ロジック（整理版）
-document.getElementById('gpxBtn').onclick = () => {
-    if (gpsPoints.length === 0) { alert("走行データがありません"); return; }
+// GPX保存ボタン
+document.getElementById('gpxBtn').onclick = function() {
+    console.log("Save button clicked, points:", gpsPoints.length);
+    if (gpsPoints.length === 0) {
+        alert("走行データが蓄積されていません。TIMERをスタート（赤色）させて移動しましたか？");
+        return;
+    }
     try {
-        let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Log_${Date.now()}</name><trkseg>`;
+        let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Log_' + Date.now() + '</name><trkseg>\n';
         const base = gpsPoints[0].time;
         gpsPoints.forEach(p => {
             const relTime = new Date(946684800000 + (p.time - base)).toISOString();
-            gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${relTime}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed></trkpt>`;
+            gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${relTime}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed></trkpt>\n`;
         });
-        gpx += `</trkseg></trk></gpx>`;
+        gpx += '</trkseg></trk></gpx>';
+        
         const blob = new Blob([gpx], { type: 'application/gpx+xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `RaceLog_${Date.now()}.gpx`;
-        document.body.appendChild(a); a.click();
-        setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 500);
-    } catch (e) { alert("GPX Error: " + e.message); }
+        a.href = url;
+        a.download = `RaceLog_${Date.now()}.gpx`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 500);
+    } catch (e) {
+        alert("GPX生成失敗: " + e.message);
+    }
 };
 
 function mainLoop() {
@@ -287,6 +300,7 @@ function mainLoop() {
 
 function drawTacho(rpm) {
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
     ctx.clearRect(0, 0, w, h);
     const segments = 75, active = Math.floor((rpm / 14000) * segments);
     const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
@@ -300,7 +314,6 @@ function drawTacho(rpm) {
             ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); ctx.restore();
         }
     }
-    document.getElementById('rpm_val').textContent = Math.floor(rpm);
 }
 
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
@@ -316,6 +329,7 @@ document.getElementById('startBtn').onclick = function() {
         swState = 2; 
         this.classList.remove('active'); 
         document.getElementById('gpxBtn').style.display = 'block'; 
+        console.log("Stopped. Points captured:", gpsPoints.length);
     }
 };
 document.getElementById('lapBtn').onclick = () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); };
