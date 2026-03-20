@@ -201,6 +201,7 @@ function handlePositionUpdate(currLat, currLon, now) {
     }
 }
 
+// --- BLE受信部 修正 ---
 async function ble() {
     try {
         const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
@@ -208,21 +209,97 @@ async function ble() {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         document.getElementById('btConnect').classList.add('active');
+        
         char.addEventListener('characteristicvaluechanged', (e) => {
-            const d = e.target.value; const now = Date.now(); lastBleDataTime = now;
+            const d = e.target.value; 
+            const now = Date.now(); 
+            lastBleDataTime = now;
             document.getElementById('debug_pkt').textContent = d.byteLength;
+
             if (d.byteLength >= 13) {
-                lat = d.getInt32(0, true) / 1000000;
-                lon = d.getInt32(4, true) / 1000000;
-                currentSpeedKmh = d.getUint16(8, true);
-                currentTemp = d.getUint8(10);
-                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+                // 1. ESP32からのバイナリを数値に変換
+                const rawLat = d.getInt32(0, true) / 1000000;
+                const rawLon = d.getInt32(4, true) / 1000000;
+                const bleSpeed = d.getUint16(8, true);
+                const bleTemp = d.getUint8(10);
+                const bleRpmRaw = d.getUint16(11, true);
+
+                // 2. グローバル変数へ格納（INT GPSと共通）
+                lat = rawLat;
+                lon = rawLon;
+                currentSpeedKmh = bleSpeed;
+                currentTemp = bleTemp;
+                currentRPM = (bleRpmRaw * 60) / pulsePerRev;
+
+                // 3. 即座にデバッグ表示を更新
+                document.getElementById('debug_lat').textContent = lat.toFixed(6);
+                document.getElementById('debug_lon').textContent = lon.toFixed(6);
                 document.getElementById('temp_val').textContent = currentTemp;
+
+                // 4. メインロジック（ラップ判定など）へ飛ばす
                 handlePositionUpdate(lat, lon, now);
             }
         });
         await char.startNotifications();
-    } catch (e) { alert(e.message); }
+    } catch (e) { alert("BLE Error: " + e.message); }
+}
+
+// --- 位置情報処理 修正 ---
+function handlePositionUpdate(currLat, currLon, now) {
+    // 座標が0の場合はノイズとして無視（GPS未捕捉状態）
+    if (currLat === 0 && currLon === 0) return;
+
+    document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
+    
+    if (swState === 1) {
+        if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = currentSpeedKmh;
+        
+        const cur = { 
+            lat: currLat, 
+            lon: currLon, 
+            time: now, 
+            rpm: currentRPM, 
+            speed: currentSpeedKmh 
+        };
+        
+        gpsPoints.push(cur);
+
+        if (lastPos) {
+            // スタートライン判定
+            const hitSL = getIntersection(lastPos, cur, lines.startLine);
+            if (hitSL) {
+                if (validDirection === null) validDirection = hitSL.dir;
+                if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
+                    processLap(hitSL.time, true);
+                }
+            }
+            // セクター判定
+            if (lapStartTime > 0) {
+                ['s1', 's2', 's3'].forEach(s => {
+                    const hit = getIntersection(lastPos, cur, lines[s + 'Line']);
+                    if (hit) {
+                        if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
+                        if (hit.dir === sectorDirections[s]) {
+                            const absT = (hit.time - lapStartTime) / 1000;
+                            if (s === 's1' && s1_abs === 0) { 
+                                s1_abs = absT; lastPassedSectorTime = absT; 
+                                document.getElementById('s1_val').textContent = s1_abs.toFixed(3); 
+                            }
+                            else if (s === 's2' && s2_abs === 0) { 
+                                s2_abs = absT; lastPassedSectorTime = absT; 
+                                document.getElementById('s2_val').textContent = (s1_abs > 0 ? (s2_abs-s1_abs) : s2_abs).toFixed(3); 
+                            }
+                            else if (s === 's3' && s3_abs === 0) { 
+                                s3_abs = absT; lastPassedSectorTime = absT; 
+                                document.getElementById('s3_val').textContent = (s2_abs > 0 ? (s3_abs-s2_abs) : s3_abs).toFixed(3); 
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        lastPos = cur;
+    }
 }
 
 function processLap(hitTime, useFreeze) {
