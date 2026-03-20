@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI V3.8 - ULTIMATE GUARD (Fixed)</title>
+    <title>KLAP DEGI V3.8 - ULTIMATE FIX</title>
     <style>
         :root { 
             --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; 
@@ -101,7 +101,7 @@
 'use strict';
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], gpsLog = [];
-let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeedInLap = 0, lastPos = null;
+let currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeed = 0, lastPos = null;
 let lat = 0, lon = 0, isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let lines = { startLine: null, s1Line: null, s2Line: null, s3Line: null };
 let s1_abs = 0, s2_abs = 0, s3_abs = 0, lastPassedSectorTime = 0;
@@ -123,10 +123,9 @@ function init() {
         }
     });
     pulsePerRev = parseFloat(localStorage.getItem('pl1')) || 1;
-    cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 10000;
+    cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 15000;
 }
 
-// 判定関数の名称を統一
 function checkLineCross(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -153,47 +152,42 @@ async function bleConnect() {
         
         const btn = document.getElementById('btConnect');
         await char.startNotifications();
-        this.classList.add('active'); 
+        btn.classList.add('active'); 
         
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
             const now = Date.now();
 
+            // V3.5の「getInt32(X, true)」形式に完全に合わせる
             if (d.byteLength >= 13) {
                 lat = d.getInt32(0, true) / 1000000;
                 lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
-                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+                
+                // RPM計算をV3.5のロジックに戻す
+                let rawHz = d.getUint16(11, true); 
+                currentRPM = (rawHz * 60) / pulsePerRev;
 
-                // ステータス表示
+                document.getElementById('speed_val').textContent = currentSpeedKmh;
+                document.getElementById('temp_val').textContent = currentTemp;
+
                 if (lat !== 0 && lon !== 0) {
                     btn.style.backgroundColor = "var(--hrc-red)";
-                    btn.style.color = "#fff";
                     btn.textContent = "GPX FIXED";
                 } else {
                     btn.style.backgroundColor = "var(--hrc-orange)";
-                    btn.style.color = "#000";
                     btn.textContent = "WAITING GPS";
                 }
 
-                document.getElementById('temp_val').textContent = currentTemp;
-
                 if (swState === 1) { 
-                    if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
+                    if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
 
                     if (lat !== 0 && lon !== 0) {
                         const curPos = { lat: lat, lon: lon, time: now };
-                        
-                        gpsLog.push({ 
-                            ...curPos, 
-                            rpm: Math.round(currentRPM), 
-                            spd: currentSpeedKmh,
-                            temp: currentTemp 
-                        });
+                        gpsLog.push({ ...curPos, rpm: Math.round(currentRPM), spd: currentSpeedKmh, temp: currentTemp });
 
                         if (lastPos) {
-                            // スタートライン判定
                             const hitSL = checkLineCross(lastPos, curPos, lines.startLine);
                             if (hitSL) {
                                 if (validDir === null) validDir = hitSL.dir;
@@ -202,7 +196,6 @@ async function bleConnect() {
                                 }
                             }
 
-                            // セクター判定
                             if (lapStartTime > 0) {
                                 ['s1', 's2', 's3'].forEach(s => {
                                     const hit = checkLineCross(lastPos, curPos, lines[s + 'Line']);
@@ -230,23 +223,15 @@ async function bleConnect() {
                 }
             }
         };
-
-        btn.style.backgroundColor = "var(--hrc-orange)";
-        btn.style.color = "#000";
         btn.textContent = "CONNECTED";
-
-    } catch (e) { 
-        console.error("BLE Error:", e);
-        this.classList.remove('active');
-        alert("BLE接続失敗: " + e.message); 
-    }
+    } catch (e) { alert("BLE Error: " + e.message); }
 }
 
 function processLap(hitTime, isAuto) {
     const lapTimeMs = hitTime - (lapStartTime || startTime);
     const s4 = lastPassedSectorTime > 0 ? (lapTimeMs/1000 - lastPassedSectorTime).toFixed(3) : "--.---";
     const data = {
-        no: lapRecords.length + 1, time: lapTimeMs, max: maxSpeedInLap,
+        no: lapRecords.length + 1, time: lapTimeMs, max: maxSpeed,
         s1: document.getElementById('s1_val').textContent,
         s2: document.getElementById('s2_val').textContent,
         s3: document.getElementById('s3_val').textContent, s4: s4
@@ -258,11 +243,10 @@ function processLap(hitTime, isAuto) {
         <div class="lap-row ${r.time === best ? 'best-lap' : ''}">
             <span>L${r.no}</span><span>${timeFormat(r.time)}</span>
         </div>`).join('');
-    lapStartTime = hitTime; maxSpeedInLap = 0;
+    lapStartTime = hitTime; maxSpeed = 0;
     s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
     setTimeout(() => {
         ['s1_val','s2_val','s3_val'].forEach(id => document.getElementById(id).textContent = "--.---");
-        document.querySelectorAll('.sec-box').forEach(el => el.classList.remove('sec-active'));
     }, 3000);
 }
 
@@ -275,9 +259,7 @@ function tick() {
         else { isFrozen = false; d1.textContent = timeFormat(now - (lapStartTime || startTime)); d1.style.color = "var(--hrc-white)"; }
     }
     drawTacho(currentRPM);
-    document.getElementById('speed_val').textContent = currentSpeedKmh;
-    document.getElementById('max_speed_val').textContent = maxSpeedInLap;
-    document.getElementById('temp_val').textContent = currentTemp;
+    document.getElementById('max_speed_val').textContent = maxSpeed;
     requestAnimationFrame(tick);
 }
 
@@ -308,7 +290,7 @@ document.getElementById('btConnect').onclick = bleConnect;
 document.getElementById('startBtn').onclick = function() {
     if (swState !== 1) {
         swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsLog = [];
-        maxSpeedInLap = 0; validDir = null; this.classList.add('active');
+        maxSpeed = 0; validDir = null; this.classList.add('active');
         document.getElementById('gpxBtn').style.display = 'none';
     } else {
         swState = 2; this.classList.remove('active');
@@ -326,74 +308,22 @@ document.getElementById('historyBtn').onclick = () => {
     document.getElementById('history-page').style.display = 'block';
 };
 
-// GPX保存 (V10.6.1 互換強化版)
 document.getElementById('gpxBtn').onclick = () => {
-    if (gpsLog.length === 0) {
-        alert("保存する走行データがありません。");
-        return;
-    }
+    if (gpsLog.length === 0) return;
     const getL = (k) => {
         const p1Lat = localStorage.getItem(k + 'P1Lat');
-        if (!p1Lat) return "";
-        return `${p1Lat},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}`;
+        return p1Lat ? `${p1Lat},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}` : "";
     };
     const lineData = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
-
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="KLAP_DEGI_ULTIMATE" 
-    xmlns="http://www.topografix.com/GPX/1/1" 
-    xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
-<metadata>
-    <name>Race Session ${new Date().toLocaleString()}</name>
-    <desc>LINE_DATA[${lineData}]</desc>
-</metadata>
-<trk>
-  <name>Race Log</name>
-  <trkseg>`;
-
-    const baseStartTime = gpsLog[0].time;
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"><metadata><desc>LINE_DATA[${lineData}]</desc></metadata><trk><name>Race</name><trkseg>`;
+    const base = gpsLog[0].time;
     gpsLog.forEach(p => {
-        const relativeTime = new Date(946684800000 + (p.time - baseStartTime)).toISOString();
-        const speedMS = (p.spd / 3.6).toFixed(2);
-        const rpm = Math.round(p.rpm || 0);
-        const temp = p.temp || 0;
-
-        gpx += `
-    <trkpt lat="${p.lat}" lon="${p.lon}">
-      <time>${relativeTime}</time>
-      <speed>${speedMS}</speed>
-      <extensions>
-        <gpxtpx:TrackPointExtension>
-          <gpxtpx:hr>${rpm}</gpxtpx:hr>
-          <gpxtpx:atemp>${temp}</gpxtpx:atemp>
-        </gpxtpx:TrackPointExtension>
-      </extensions>
-    </trkpt>`;
+        const time = new Date(946684800000 + (p.time - base)).toISOString();
+        gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${time}</time><speed>${(p.spd/3.6).toFixed(2)}</speed><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.rpm}</gpxtpx:hr><gpxtpx:atemp>${p.temp}</gpxtpx:atemp></gpxtpx:TrackPointExtension></extensions></trkpt>`;
     });
-
-    gpx += `
-  </trkseg>
-</trk>
-</gpx>`;
-
-    try {
-        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `RaceLog_Ultimate_${Date.now()}.gpx`;
-        document.body.appendChild(a);
-        setTimeout(() => {
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
-        }, 50);
-        window.alert(`保存完了: ${gpsLog.length}地点`);
-    } catch (e) {
-        alert("保存エラー: " + e.message);
-    }
+    gpx += `</trkseg></trk></gpx>`;
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `RaceLog_${Date.now()}.gpx`; a.click();
 };
 
 function timeFormat(ms){
