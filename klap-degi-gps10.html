@@ -144,61 +144,131 @@ function checkLineCross(p1, p2, line) {
 
 async function bleConnect() {
     try {
-        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        // BLEデバイスの検索と接続
+        const device = await navigator.bluetooth.requestDevice({ 
+            filters: [{ services: [SERVICE_UUID] }] 
+        });
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
+        
+        const btn = document.getElementById('btConnect');
+        
+        // データ受信時のイベントリスナー
         char.addEventListener('characteristicvaluechanged', (e) => {
             const d = e.target.value;
             const now = Date.now();
+            
+            // ESP32からのデータ長が正しいかチェック (13バイト以上)
             if (d.byteLength >= 13) {
+                // バイナリデータの解析 (リトルエンディアン)
                 lat = d.getInt32(0, true) / 1000000;
                 lon = d.getInt32(4, true) / 1000000;
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
                 currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
-                if (swState === 1) {
+
+                // --- 【ステータス表示ロジック】 ---
+                if (lat !== 0 && lon !== 0) {
+                    // GPS測位完了: 赤背景
+                    btn.style.backgroundColor = "var(--hrc-red)";
+                    btn.style.color = "#fff";
+                    btn.textContent = "GPS FIXED";
+                } else {
+                    // BLE接続のみ/GPS捕捉待ち: オレンジ背景
+                    btn.style.backgroundColor = "var(--hrc-orange)";
+                    btn.style.color = "#000";
+                    btn.textContent = "WAITING GPS";
+                }
+
+                // --- 【走行データ記録 & 判定ロジック】 ---
+                if (swState === 1) { // タイマー動作中
+                    // 最高速更新
                     if (currentSpeedKmh > maxSpeed) maxSpeed = currentSpeedKmh;
-                    const curPos = { lat: lat, lon: lon, time: now };
-                    gpsLog.push({ ...curPos, rpm: currentRPM, spd: currentSpeedKmh });
-                    if (lastPos && lat !== 0) {
-                        const hitSL = checkLineCross(lastPos, curPos, lines.startLine);
-                        if (hitSL) {
-                            if (validDir === null) validDir = hitSL.dir;
-                            if (hitSL.dir === validDir && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
-                                processLap(hitSL.time, true);
-                                nextExpectedSector = 's1'; 
+
+                    // GPSが有効な場合のみログ保存とライン判定を実行
+                    if (lat !== 0 && lon !== 0) {
+                        const curPos = { lat: lat, lon: lon, time: now };
+                        
+                        // GPX保存用のログ配列に追加 (RPMも整数で保存)
+                        gpsLog.push({ 
+                            ...curPos, 
+                            rpm: Math.round(currentRPM), 
+                            spd: currentSpeedKmh 
+                        });
+
+                        // 前回座標がある場合、ライン通過判定を行う
+                        if (lastPos) {
+                            // 1. スタート/ゴールライン判定
+                            const hitSL = checkLineCross(lastPos, curPos, lines.startLine);
+                            if (hitSL) {
+                                // 初回通過時に通過方向(dir)を自動記憶
+                                if (validDir === null) validDir = hitSL.dir;
+
+                                // 方向が一致し、かつクールダウン(15秒等)経過後ならラップ確定
+                                if (hitSL.dir === validDir && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
+                                    processLap(hitSL.time, true);
+                                    nextExpectedSector = 's1'; // 次の期待セクターをリセット
+                                }
                             }
-                        }
-                        if (lapStartTime > 0) {
-                            ['s1', 's2', 's3'].forEach(s => {
-                                const hit = checkLineCross(lastPos, curPos, lines[s + 'Line']);
-                                if (hit) {
-                                    if (sectorDirs[s] === null) sectorDirs[s] = hit.dir;
-                                    if (hit.dir === sectorDirs[s]) {
-                                        const absTime = (hit.time - lapStartTime) / 1000;
-                                        if (s === 's1' && nextExpectedSector === 's1') {
-                                            s1_abs = absTime; updateSector('s1', absTime);
-                                            nextExpectedSector = 's2'; lastPassedSectorTime = absTime;
-                                        } else if (s === 's2' && (nextExpectedSector === 's2' || nextExpectedSector === 's1')) {
-                                            s2_abs = absTime; updateSector('s2', s1_abs > 0 ? s2_abs - s1_abs : s2_abs);
-                                            nextExpectedSector = 's3'; lastPassedSectorTime = absTime;
-                                        } else if (s === 's3' && (nextExpectedSector === 's3' || nextExpectedSector === 's2')) {
-                                            s3_abs = absTime; updateSector('s3', s2_abs > 0 ? s3_abs - s2_abs : (s1_abs > 0 ? s3_abs - s1_abs : s3_abs));
-                                            nextExpectedSector = 'goal'; lastPassedSectorTime = absTime;
+
+                            // 2. セクター判定 (順序ガード付き)
+                            if (lapStartTime > 0) {
+                                ['s1', 's2', 's3'].forEach(s => {
+                                    const hit = checkLineCross(lastPos, curPos, lines[s + 'Line']);
+                                    if (hit) {
+                                        // セクターごとの方向記憶（逆走防止）
+                                        if (sectorDirs[s] === null) sectorDirs[s] = hit.dir;
+
+                                        if (hit.dir === sectorDirs[s]) {
+                                            const absTime = (hit.time - lapStartTime) / 1000;
+
+                                            // S1通過
+                                            if (s === 's1' && nextExpectedSector === 's1') {
+                                                s1_abs = absTime;
+                                                updateSector('s1', absTime);
+                                                nextExpectedSector = 's2';
+                                                lastPassedSectorTime = absTime;
+                                            } 
+                                            // S2通過 (S1飛ばし対応)
+                                            else if (s === 's2' && (nextExpectedSector === 's2' || nextExpectedSector === 's1')) {
+                                                s2_abs = absTime;
+                                                const diff = s1_abs > 0 ? (s2_abs - s1_abs) : s2_abs;
+                                                updateSector('s2', diff);
+                                                nextExpectedSector = 's3';
+                                                lastPassedSectorTime = absTime;
+                                            }
+                                            // S3通過 (S2飛ばし対応)
+                                            else if (s === 's3' && (nextExpectedSector === 's3' || nextExpectedSector === 's2' || nextExpectedSector === 's1')) {
+                                                s3_abs = absTime;
+                                                const diff = s2_abs > 0 ? (s3_abs - s2_abs) : (s1_abs > 0 ? s3_abs - s1_abs : s3_abs);
+                                                updateSector('s3', diff);
+                                                nextExpectedSector = 'goal';
+                                                lastPassedSectorTime = absTime;
+                                            }
                                         }
                                     }
-                                }
-                            });
+                                });
+                            }
                         }
+                        lastPos = curPos; // 次回判定用に座標を保存
                     }
-                    lastPos = curPos;
                 }
             }
         });
+
+        // 通知の開始
         await char.startNotifications();
-        document.getElementById('btConnect').classList.add('active');
-    } catch (e) { alert("BLE Error: " + e.message); }
+        
+        // 接続直後の表示（まだGPS座標は来ていない前提）
+        btn.style.backgroundColor = "var(--hrc-orange)";
+        btn.style.color = "#000";
+        btn.textContent = "CONNECTED";
+        
+    } catch (e) { 
+        console.error(e);
+        alert("BLE接続に失敗しました: " + e.message); 
+    }
 }
 
 function updateSector(id, val) {
