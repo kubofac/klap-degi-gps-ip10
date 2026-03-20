@@ -197,70 +197,71 @@ async function connectBle() {
 }
 
 function processPosition(lat, lon, time) {
-    // --- 1. デバッグ表示の更新 (常に実行) ---
     const debugEl = document.getElementById('debug-info');
+    
+    // --- 1. 超詳細デバッグ表示 (受信した生の値をそのまま出す) ---
     if (debugEl) {
+        let statusColor = (lat === 0 && lon === 0) ? "orange" : "#0ff";
+        let statusText = (lat === 0 && lon === 0) ? "GPS SEARCHING (WAITing 0.00)" : "GPS FIXED (READY)";
+        
         debugEl.innerHTML = `
-            <div style="color: #0f0; font-weight: bold;">[DEBUG GPS]</div>
-            LAT: ${lat.toFixed(6)}<br>
-            LON: ${lon.toFixed(6)}<br>
-            SPD: ${currentSpeedKmh.toFixed(1)} km/h<br>
-            PTS: ${gpsPoints.length}<br>
-            STATE: ${swState === 1 ? '<span style="color:red;">RECORDING</span>' : 'STOP'}
+            <div style="color: #0f0; border-bottom: 1px solid #444; margin-bottom: 5px;">[BLE/GPS MONITOR]</div>
+            <span style="color:${statusColor}; font-weight:bold;">${statusText}</span><br>
+            LAT: <span style="color:#fff">${lat.toFixed(6)}</span><br>
+            LON: <span style="color:#fff">${lon.toFixed(6)}</span><br>
+            SPD: ${currentSpeedKmh} km/h | TEMP: ${currentTemp}℃<br>
+            RPM: ${Math.round(currentRPM)} | PTS: ${gpsPoints.length}<br>
+            <div style="font-size:10px; color:#888; margin-top:5px;">
+                TIME: ${new Date(time).toLocaleTimeString()}.${time % 1000}<br>
+                SW_STATE: ${swState} (1=REC)
+            </div>
         `;
     }
 
-    // --- 2. 計測中でなければここで終了 (保存・判定しない) ---
+    // --- 2. 保存・ラップ判定のガード条件 ---
+    // 「計測中でない」 または 「座標が0（未測位）」 の場合は、ここから先（保存処理）へ進ませない
     if (swState !== 1) return;
+    if (lat === 0 && lon === 0) return; 
 
-    // --- 3. 走行データの記録 (GPX用) ---
+    // --- 3. 走行データの記録 (ここから先は有効なデータのみ) ---
     if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = Math.round(currentSpeedKmh);
     const cur = { lat, lon, time, rpm: currentRPM, speed: currentSpeedKmh };
     gpsPoints.push(cur);
 
     // --- 4. ラップ・セクター判定ロジック ---
     if (lastPos && lines.startLine) {
-        // スタート/フィニッシュライン通過判定
         const hitSL = getIntersection(lastPos, cur, lines.startLine);
         if (hitSL) {
             if (validDirection === null) validDirection = hitSL.dir;
-            // 進行方向が一致し、かつクールダウン時間を経過しているか
             if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
                 processLap(hitSL.time, true);
             }
         }
 
-        // 各セクターライン(S1-S3)の通過判定
+        // セクター判定
         ['s1', 's2', 's3'].forEach(s => {
             const hit = getIntersection(lastPos, cur, lines[s + 'Line']);
             if (hit && (sectorDirections[s] === null || hit.dir === sectorDirections[s])) {
                 if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
-                
                 const absTime = (hit.time - lapStartTime) / 1000;
                 
-                if (s === 's1' && s1_abs === 0) { 
-                    s1_abs = absTime; 
-                    lastPassedSectorTime = absTime; 
-                    document.getElementById('s1_val').textContent = s1_abs.toFixed(3); 
-                }
-                else if (s === 's2' && s2_abs === 0) { 
-                    s2_abs = absTime; 
-                    lastPassedSectorTime = absTime; 
-                    document.getElementById('s2_val').textContent = (s1_abs > 0 ? s2_abs - s1_abs : s2_abs).toFixed(3); 
-                }
-                else if (s === 's3' && s3_abs === 0) { 
-                    s3_abs = absTime; 
-                    lastPassedSectorTime = absTime; 
-                    document.getElementById('s3_val').textContent = (s2_abs > 0 ? s3_abs - s2_abs : s3_abs).toFixed(3); 
+                if (s === 's1' && s1_abs === 0) {
+                    s1_abs = absTime; lastPassedSectorTime = absTime;
+                    document.getElementById('s1_val').textContent = s1_abs.toFixed(3);
+                } else if (s === 's2' && s2_abs === 0) {
+                    s2_abs = absTime; lastPassedSectorTime = absTime;
+                    document.getElementById('s2_val').textContent = (s1_abs > 0 ? s2_abs - s1_abs : s2_abs).toFixed(3);
+                } else if (s === 's3' && s3_abs === 0) {
+                    s3_abs = absTime; lastPassedSectorTime = absTime;
+                    document.getElementById('s3_val').textContent = (s2_abs > 0 ? s3_abs - s2_abs : s3_abs).toFixed(3);
                 }
             }
         });
     }
 
-    // 次回判定用に現在の座標を保存
+    // 次回判定用に保存
     lastPos = cur;
 }
-
 function processLap(hitTime, useFreeze) {
     const lapTimeMs = hitTime - (lapStartTime || startTime);
     const lapTimeSec = lapTimeMs / 1000;
