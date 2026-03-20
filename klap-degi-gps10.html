@@ -126,7 +126,9 @@ async function connectBle() {
     const btn = document.getElementById('btConnect');
     const debugEl = document.getElementById('debug-info');
     try {
-        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [SERVICE_UUID] }]
+        });
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
@@ -136,18 +138,25 @@ async function connectBle() {
         char.oncharacteristicvaluechanged = (e) => {
             const d = e.target.value;
             
-            // --- 超緊急デバッグ：これが動けば通信は「絶対」に来ている ---
+            // 【超重要】13バイトに満たなくても、データが来たら即表示
             if (debugEl) {
-                const rLat = d.getInt32(0, true);
-                const rLon = d.getInt32(4, true);
+                // 生データを16進数で表示（これで送受信の有無が確定します）
+                let rawHex = "";
+                for(let i=0; i<d.byteLength; i++) {
+                    rawHex += d.getUint8(i).toString(16).padStart(2, '0') + " ";
+                }
+                
                 debugEl.innerHTML = `
-                    <div style="color:#0f0">[RAW DATA RECEIVED]</div>
-                    RAW_LAT: ${rLat}<br>
-                    RAW_LON: ${rLon}<br>
-                    BYTES: ${d.byteLength}
+                    <div style="color:#0f0">[DATA RECEIVED!]</div>
+                    SIZE: ${d.byteLength} bytes<br>
+                    HEX: <span style="font-family:monospace; color:#ccc;">${rawHex}</span><br>
+                    ---<br>
+                    SW_STATE: ${swState}<br>
+                    GPS_VALID: ${d.byteLength >= 8 && d.getInt32(0,true) !== 0 ? "YES" : "WAITING SAT..."}
                 `;
             }
 
+            // 13バイトあれば解析を続行
             if (d.byteLength >= 13) {
                 const lat = d.getInt32(0, true) / 1000000;
                 const lon = d.getInt32(4, true) / 1000000;
@@ -156,15 +165,15 @@ async function connectBle() {
                 currentRPM = (d.getUint16(11, true) * 60) / (pulsePerRev || 1);
 
                 document.getElementById('temp_val').textContent = currentTemp;
-
-                // ここで下の関数を呼び出す
                 processPosition(lat, lon, Date.now());
             }
         };
+
         await char.startNotifications();
-        if(debugEl) debugEl.innerHTML = "WAITING FOR FIRST PACKET...";
-    } catch (e) { 
-        if(debugEl) debugEl.innerHTML = "BLE ERROR: " + e.message;
+        if (debugEl) debugEl.innerHTML = "BLE: NOTIFICATIONS STARTING...<br>Please wait for ESP32 loop (100ms)";
+        
+    } catch (e) {
+        if (debugEl) debugEl.innerHTML = `<span style="color:red;">BLE ERROR: ${e.message}</span>`;
     }
 }
 
