@@ -169,33 +169,49 @@ async function connectBle() {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         btn.classList.add('active');
+
         char.oncharacteristicvaluechanged = (e) => {
-    const d = e.target.value;
-    if (d.byteLength >= 13) {
-        const latRaw = d.getInt32(0, true);
-        const lonRaw = d.getInt32(4, true);
-        const lat = latRaw / 1000000;
-        const lon = lonRaw / 1000000;
+            const d = e.target.value;
+            
+            // --- デバッグ用：データが届いているか確認 ---
+            const debugEl = document.getElementById('debug-info');
+            if (debugEl) {
+                // 届いたバイト数を表示（13のはず）
+                debugEl.innerHTML = `RECEIVING: ${d.byteLength} bytes...`;
+            }
 
-        // 【修正ポイント】座標が0（未測位）でない場合のみ青点灯させる
-        if (latRaw !== 0 && lonRaw !== 0) {
-            updateIndicator('btConnect', true);
-            clearTimeout(bleGpsTimer);
-            bleGpsTimer = setTimeout(() => updateIndicator('btConnect', false), 1500);
-        }
+            if (d.byteLength >= 13) {
+                // ESP32のパケット構造に合わせて抽出
+                const latRaw = d.getInt32(0, true);
+                const lonRaw = d.getInt32(4, true);
+                const lat = latRaw / 1000000;
+                const lon = lonRaw / 1000000;
 
-        currentSpeedKmh = d.getUint16(8, true);
-        currentTemp = d.getUint8(10);
-        currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
-        
-        document.getElementById('temp_val').textContent = currentTemp;
-        processPosition(lat, lon, Date.now());
-    }
-};
+                // 共通変数に格納
+                currentSpeedKmh = d.getUint16(8, true);
+                currentTemp = d.getUint8(10);
+                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+
+                // UI更新
+                document.getElementById('temp_val').textContent = currentTemp;
+
+                // 座標が 0 であってもデバッグ版 processPosition を呼び出す
+                processPosition(lat, lon, Date.now());
+
+                // 青点灯処理（座標が0以外の時のみ）
+                if (latRaw !== 0 && lonRaw !== 0) {
+                    updateIndicator('btConnect', true);
+                    clearTimeout(bleGpsTimer);
+                    bleGpsTimer = setTimeout(() => updateIndicator('btConnect', false), 1500);
+                }
+            }
+        };
         await char.startNotifications();
-    } catch (e) { btn.classList.remove('active'); }
+    } catch (e) { 
+        console.error(e);
+        btn.classList.remove('active'); 
+    }
 }
-
 function processPosition(lat, lon, time) {
     const debugEl = document.getElementById('debug-info');
     
