@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Manager</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; }
+        h2 { color: #ff9900; border-bottom: 2px solid #ff9900; padding-bottom: 10px; }
+        .card { background: #222; border-radius: 10px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #ff9900; }
+        .time { font-size: 0.8em; color: #888; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .save { background: #28a745; color: white; }
+        .del { background: #dc3545; color: white; }
+        .refresh { background: #007bff; width: 100%; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>走行ログ管理 (Safari用)</h2>
+    <button class="refresh" onclick="location.reload()">リスト更新</button>
+    <div id="list"></div>
+
+    <script>
+        function loadLogs() {
+            const history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
+            const listDiv = document.getElementById('list');
+            listDiv.innerHTML = history.length ? '' : 'ログがありません。';
+
+            // 新しい順に表示
+            history.slice().reverse().forEach((item, revIndex) => {
+                const index = history.length - 1 - revIndex;
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <div><strong>${item.name}</strong></div>
+                    <div class="time">${item.time}</div>
+                    <div class="btn-group">
+                        <button class="save" onclick="download(${index})">iPhone保存</button>
+                        <button class="del" onclick="remove(${index})">削除</button>
+                    </div>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+
+        function download(index) {
+            const history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
+            const item = history[index];
+            const blob = new Blob([item.data], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${item.name}.gpx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function remove(index) {
+            if (confirm("削除しますか？")) {
+                let history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
+                history.splice(index, 1);
+                localStorage.setItem('gpx_sessions', JSON.stringify(history));
+                loadLogs();
+            }
+        }
+
+        window.onload = loadLogs;
+    </script>
+</body>
+</html>
