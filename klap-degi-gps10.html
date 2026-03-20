@@ -158,62 +158,47 @@ function handlePositionUpdate(currLat, currLon, now) {
 }
 
 // 3. GPX保存処理（Bluefy用調整）
+
 function saveGPX() {
-    console.log("GPX Save Process Started. Points:", gpsPoints.length);
-    
     if (!gpsPoints || gpsPoints.length === 0) {
-        alert("データが0件です。走行ログが記録されていません。");
+        alert("データが0件です。");
         return;
     }
 
     try {
-        // --- 1. ラインデータの構築 (V12.1.4 解析ツール用) ---
+        // --- GPX文字列の生成ロジック (既存のものをそのまま使用) ---
         const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
         const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
         const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
         const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
         const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
 
-        // --- 2. GPX文字列の生成 ---
         let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
-        gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${new Date().toLocaleString()}</name><trkseg>\n`;
-        
+        gpx += `<metadata><desc>${metaLineData}</desc></metadata>\n<trk><name>Log_${new Date().toLocaleTimeString()}</name><trkseg>\n`;
         gpsPoints.forEach(p => {
             const timeStr = new Date(p.time).toISOString();
             gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${timeStr}</time><speed>${(p.speed / 3.6).toFixed(2)}</speed><extensions><rpm>${Math.floor(p.rpm || 0)}</rpm></extensions></trkpt>\n`;
         });
         gpx += '</trkseg></trk></gpx>';
 
-        // --- 3. ブラウザ判定と保存処理 ---
-        const isBluefy = navigator.userAgent.includes('Bluefy');
+        // --- 【ここからが変更点】履歴としてLocalStorageに保存 ---
+        let history = JSON.parse(localStorage.getItem('gpx_sessions') || '[]');
+        
+        // 新しいセッション情報を追加
+        history.push({
+            id: Date.now(),
+            name: `Log_${new Date().getHours()}${new Date().getMinutes()}_${gpsPoints.length}pts`,
+            data: gpx,
+            time: new Date().toLocaleString()
+        });
 
-        if (isBluefy) {
-            // 【Bluefyの場合】ブラウザのメモリ(LocalStorage)に保存してSafariへパスする
-            localStorage.setItem('relay_gpx_log', gpx);
-            localStorage.setItem('relay_gpx_time', Date.now());
-            
-            alert("【バックアップ完了】\nBluefyの制限で直接保存できません。\n\nこのまま『Safari』で同じページを開き直してください。\n自動で保存ダイアログが出ます。");
-        } else {
-            // 【Safari/その他ブラウザの場合】直接ダウンロードを実行
-            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `RaceLog_${Date.now()}.gpx`;
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                // Safariで保存が完了したらメモリを掃除する
-                localStorage.removeItem('relay_gpx_log');
-                localStorage.removeItem('relay_gpx_time');
-            }, 1000);
-        }
+        // 保存（ブラウザの共通引き出しに入れる）
+        localStorage.setItem('gpx_sessions', JSON.stringify(history));
+
+        alert("【バックアップ完了】\nセッションを保存しました。\nSafariで管理アプリを開いて書き出してください。");
 
     } catch (err) {
-        alert("システムエラー発生: " + err.message);
+        alert("保存エラー: " + err.message);
     }
 }
 // --- 以下、補助関数 ---
