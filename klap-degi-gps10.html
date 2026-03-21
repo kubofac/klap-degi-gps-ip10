@@ -378,26 +378,22 @@ document.getElementById('startBtn').addEventListener('click', function() {
 document.getElementById('lapBtn').addEventListener('click', () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); });
 // --- 6. GPX SAVE ボタンの修正 (Bluefy/Safariリレー対応版) ---
 document.getElementById('gpxBtn').onclick = () => {
-    if (gpsPoints.length === 0) {
-        alert("走行データがありません。");
-        return;
-    }
+    if (gpsPoints.length === 0) return;
 
+    // 仕様書通り localStorage から座標を取得して desc に格納
     const getL = (k) => {
         const p1 = localStorage.getItem(k + 'P1Lat');
         return p1 ? `${p1},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}` : "SKIP";
     };
-    const lineData = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
+    const lineMeta = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
 
-    // --- GPX文字列の生成 (提示された元のコードと同じフォーマット) ---
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
     gpx += `<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">\n`;
-    gpx += `  <metadata><desc>LINE_DATA[${lineData}]</desc></metadata>\n`;
-    gpx += `  <trk><name>Log_${new Date().toLocaleString()}</name><trkseg>\n`;
+    gpx += `  <metadata><desc>LINE_DATA[${lineMeta}]</desc></metadata>\n`;
+    gpx += `  <trk><name>RaceLog_${Date.now()}</name><trkseg>\n`;
 
     const base = gpsPoints[0].time;
     gpsPoints.forEach(p => {
-        // 時刻をISO形式に変換 (2000-01-01基準)
         const relTime = new Date(946684800000 + (p.time - base)).toISOString();
         gpx += `    <trkpt lat="${p.lat}" lon="${p.lon}">`;
         gpx += `<time>${relTime}</time>`;
@@ -407,71 +403,70 @@ document.getElementById('gpxBtn').onclick = () => {
     });
     gpx += `  </trkseg></trk>\n</gpx>`;
 
-    // --- レスポンシブなコピー用ポップアップの表示 ---
+    // --- 以下、前回作成した「Bluefy用コピー画面」の表示処理へ続く ---
+    showCopyOverlay(gpx); 
+};
+
+// 重複を避けるためコピー画面表示を関数化
+function showCopyOverlay(gpx) {
     const overlay = document.createElement('div');
     overlay.id = "gpx-copy-overlay";
-    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:15px;";
-
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:15px;";
     overlay.innerHTML = `
-        <div style="background:#fff; width:100%; max-width:550px; height:90%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-            <h2 style="margin:0 0 10px 0; font-size:1.4em; text-align:center;">GPXログのコピー</h2>
-            <p style="font-size:12px; color:#d9534f; font-weight:bold; margin-bottom:10px; text-align:center;">
-                Bluefy制限のため、下を全選択してコピーしてください。
-            </p>
-            
-            <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:12px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; box-sizing:border-box; margin-bottom:15px; outline:none; -webkit-overflow-scrolling:touch;">${gpx}</textarea>
-            
-            <button id="btnCopyGo" style="width:100%; height:75px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em; cursor:pointer; box-shadow:0 4px 10px rgba(40,167,69,0.3);">① コピーしてSafari保存へ</button>
-            
-            <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px; font-size:1em; cursor:pointer;">閉じる</button>
+        <div style="background:#fff; width:100%; max-width:550px; height:90%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box;">
+            <h2 style="margin:0 0 10px 0; font-size:1.4em; text-align:center;">GPXコピー</h2>
+            <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:12px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; margin-bottom:15px; outline:none;">${gpx}</textarea>
+            <button id="btnCopyFinal" style="width:100%; height:75px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em;">コピーしてSafariへ移動</button>
+            <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px;">キャンセル</button>
         </div>
     `;
     document.body.appendChild(overlay);
 
-    // --- コープ＆ジャンプ処理 ---
-    document.getElementById('btnCopyGo').onclick = function() {
+    document.getElementById('btnCopyFinal').onclick = function() {
         const textArea = document.getElementById('copyTag');
-        textArea.focus();
+        textArea.select();
         textArea.setSelectionRange(0, 999999);
-        const successful = document.execCommand('copy');
-        
-        if (successful) {
-            alert("クリップボードにコピーしました！\nOKを押すとSafariへ切り替えます。");
-            
-            // iOSショートカット経由でSafariを起動
-            window.location.href = "shortcuts://run-shortcut?name=OpenExport";
-            
-            // 予備：2秒後に直接URLへ（Bluefyで開いてしまう場合の案内）
-            setTimeout(() => {
-                if(confirm("Safariが自動起動しない場合は、手動でSafariを開き export.html へ貼り付けてください。")) {
-                    window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
-                }
-            }, 2000);
-        } else {
-            alert("コピーに失敗しました。お手数ですが手動で全選択してコピーしてください。");
-        }
+        document.execCommand('copy');
+        alert("コピー完了！Safariで保存してください。");
+        window.location.href = "shortcuts://run-shortcut?name=OpenExport";
     };
-};
+}
 // --- 5. HISTORY 表示の修正 (RPM対応) ---
 document.getElementById('historyBtn').onclick = function() {
     if (lapRecords.length === 0) return;
-    const bT = Math.min(...lapRecords.map(r => r.time));
+
+    // 各項目のベスト値を算出
+    const getBest = (key) => {
+        const values = lapRecords.map(r => parseFloat(r[key])).filter(v => !isNaN(v));
+        return values.length > 0 ? Math.min(...values) : null;
+    };
+
+    const bestTotal = Math.min(...lapRecords.map(r => r.time));
+    const bestS1 = getBest('s1');
+    const bestS2 = getBest('s2');
+    const bestS3 = getBest('s3');
+    const bestS4 = getBest('s4');
+
+    document.getElementById('history-body').innerHTML = lapRecords.map(r => {
+        const isBestLap = r.time === bestTotal;
+        // 各セクターがベスト値かどうか判定する関数
+        const checkBest = (val, best) => (parseFloat(val) === best) ? `style="color:var(--hrc-red); font-weight:bold;"` : "";
+
+        return `
+            <tr style="${isBestLap ? 'background:rgba(228,0,43,0.15);' : ''}">
+                <td>${r.no}</td>
+                <td ${checkBest(r.s1, bestS1)}>${r.s1}</td>
+                <td ${checkBest(r.s2, bestS2)}>${r.s2}</td>
+                <td ${checkBest(r.s3, bestS3)}>${r.s3}</td>
+                <td ${checkBest(r.s4, bestS4)}>${r.s4}</td>
+                <td style="${isBestLap ? 'color:var(--hrc-red); font-weight:bold;' : ''}">${timeFormat(r.time)}</td>
+                <td>${r.max}</td>
+                <td>${Math.round(r.maxRpm || 0)}</td>
+            </tr>`;
+    }).join('');
     
-    // テーブルヘッダーに合わせてデータを流し込む
-    document.getElementById('history-body').innerHTML = lapRecords.map(r => `
-        <tr style="${r.time === bT ? 'background:rgba(228,0,43,0.15);' : ''}">
-            <td>${r.no}</td>
-            <td>${r.s1}</td>
-            <td>${r.s2}</td>
-            <td>${r.s3}</td>
-            <td>${r.s4}</td>
-            <td style="${r.time === bT ? 'color:var(--hrc-red); font-weight:bold;' : ''}">${timeFormat(r.time)}</td>
-            <td>${r.max}</td>
-            <td>${Math.round(r.maxRpm || 0)}</td>
-        </tr>`).join('');
     document.getElementById('history-page').style.display = 'block';
 };
-
 window.onload = () => { initLines(); mainLoop(); };
 </script>
 </body>
