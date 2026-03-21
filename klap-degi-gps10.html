@@ -274,43 +274,38 @@ function showCopyOverlay(gpx) {
             <h2 style="margin:0 0 10px 0; color:var(--hrc-red); font-size:22px;">GPX COPIED!</h2>
             <p style="font-size:13px; margin-bottom:20px; color:#ccc;">
                 クリップボードに保存しました。<br>
-                <b>Bluefyのタブを切り替える</b>か、<br>
-                <b>ショートカット</b>を起動して解析してください。
+                <b>Bluefyのタブを切り替えて</b><br>
+                data.htmlを開いてください。
             </p>
-            
-            <textarea id="copyTag" readonly style="width:100%; height:120px; background:#000; color:#0f0; border:1px solid #333; font-family:monospace; font-size:11px; padding:10px; margin-bottom:20px; border-radius:5px; resize:none;">${gpx}</textarea>
-            
-            <button id="finalCopyBtn" style="height:75px; background:var(--hrc-red); color:#fff; font-size:20px; font-weight:bold; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 4px 20px rgba(228,0,43,0.5);">
-                TAP TO RE-COPY
-            </button>
-            
-            <button onclick="document.getElementById('copy-overlay').remove()" style="margin-top:20px; background:none; border:none; color:#888; font-size:15px; text-decoration:underline; cursor:pointer;">
-                CLOSE
-            </button>
+            <textarea id="copyTag" readonly style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; font-family:monospace; font-size:11px; padding:10px; margin-bottom:20px; border-radius:5px; resize:none;">${gpx}</textarea>
+            <button id="finalCopyBtn" style="height:70px; background:var(--hrc-red); color:#fff; font-size:20px; font-weight:bold; border:none; border-radius:12px;">TAP TO RE-COPY</button>
+            <button id="closeOverlayBtn" style="margin-top:20px; background:none; border:none; color:#888; font-size:16px; text-decoration:underline; padding:10px;">CLOSE (RETURN TO TIMER)</button>
         </div>
     `;
     document.body.appendChild(ov);
 
-    // 初回実行：オーバーレイが開いた瞬間に一度コピーを試みる
+    // コピー処理
     const executeCopy = () => {
         const area = document.getElementById('copyTag');
         area.select();
         area.setSelectionRange(0, 99999);
-        const success = document.execCommand('copy');
-        if (success) {
-            const btn = document.getElementById('finalCopyBtn');
-            btn.textContent = "DONE! (COPIED)";
-            btn.style.background = "#008000";
-        }
+        document.execCommand('copy');
+        document.getElementById('finalCopyBtn').textContent = "COPIED OK!";
+        document.getElementById('finalCopyBtn').style.background = "#008000";
     };
 
-    // 念のため初期実行
     executeCopy();
-
-    // ボタンを再度押した場合もコピー（確実性のため）
     document.getElementById('finalCopyBtn').onclick = executeCopy;
-}
 
+    // 【重要修正】CLOSEボタンで完全に元の画面に戻す
+    document.getElementById('closeOverlayBtn').onclick = () => {
+        ov.remove(); 
+        // もしdashboardが非表示になっていたら強制表示
+        document.getElementById('dashboard').style.display = 'flex';
+        // 再描画を促す
+        requestAnimationFrame(mainLoop);
+    };
+}
 function updateLapList() {
     const best = Math.min(...lapRecords.map(r => r.time));
     document.getElementById('lap').innerHTML = lapRecords.map(r => `<div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}"><span>L${r.no}</span><span>${timeFormat(r.time)}</span></div>`).join('');
