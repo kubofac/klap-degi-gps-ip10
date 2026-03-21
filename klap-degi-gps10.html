@@ -3,112 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>KLAP DEGI V4.6 - ULTIMATE</title>
-<style>
-    :root { 
-        --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; 
-        --bg-dark: #000000; --hrc-orange: #FFA500; 
-    }
-    body, html { 
-        margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); 
-        color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; 
-    }
-    #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
-    #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
-    
-    #debug-overlay { position: absolute; left: 10px; bottom: 65px; font-family: monospace; font-size: 10px; color: rgba(255, 255, 255, 0.4); z-index: 100; pointer-events: none; }
-
-    .main-ui-container {
-        position: absolute; right: 10px; top: 65px; bottom: 65px; 
-        display: flex; flex-direction: row; align-items: flex-start; gap: 20px; z-index: 20; pointer-events: none;
-    }
-    #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; margin-top: 50px;}
-    #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; }
-    #display1 { font-size: 15vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; white-space: nowrap; }
-    
-    #sector-container { display: flex; justify-content: flex-end; gap: 10px; font-size: 4vh; font-weight: 900; height: 4.5vh; margin-top: 5px; }
-    .sec-box { display: none; text-shadow: 2px 2px 8px #000; color: #fff; }
-    #display { font-size: 2.5vh; opacity: 0.8; margin-top: 5px; }
-
-    .right-panels { display: flex; flex-direction: row; gap: 15px; height: 100%; align-items: flex-start; pointer-events: auto;}
-    #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-    #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
-    .lap-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; font-weight: 900; }
-    .best-lap { color: var(--hrc-red) !important; }
-
-    .data-panel { display: flex; flex-direction: column; gap: 10px; width: 90px; }
-    .data-box { display: flex; flex-direction: column; align-items: flex-end; }
-    .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
-    .val { font-size: 32px; font-weight: 900; line-height: 0.9; }
-
-    #history-page { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 2000; padding: 20px; box-sizing: border-box; overflow-y: auto; }
-    #history-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px; }
-    #history-table th { color: var(--hrc-red); border-bottom: 2px solid var(--hrc-red); padding: 8px; }
-    #history-table td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
-    .close-btn { background: var(--hrc-red); color: white; padding: 15px; text-align: center; font-weight: bold; border-radius: 4px; cursor: pointer; }
-
-    footer { height: 55px; display: flex; gap: 2px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 1000; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
-    button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 8px; font-weight: bold; cursor: pointer; }
-    button.active { background: var(--hrc-red) !important; border: 1px solid #fff; }
-</style>
+    <title>KLAP DEGI V5.0 - PROFESSIONAL</title>
+    <style>
+        :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
+        #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
+        #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
+        #debug-overlay { position: absolute; left: 10px; bottom: 65px; font-family: monospace; font-size: 10px; color: rgba(255, 255, 255, 0.4); z-index: 100; pointer-events: none; }
+        .main-ui-container { position: absolute; right: 10px; top: 65px; bottom: 65px; display: flex; flex-direction: row; align-items: flex-start; gap: 20px; z-index: 20; pointer-events: none; }
+        #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; margin-top: 50px;}
+        #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; }
+        #display1 { font-size: 15vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; white-space: nowrap; }
+        #sector-container { display: flex; justify-content: flex-end; gap: 10px; font-size: 4vh; font-weight: 900; height: 4.5vh; margin-top: 5px; }
+        .sec-box { display: none; text-shadow: 2px 2px 8px #000; color: #fff; }
+        #display { font-size: 2.5vh; opacity: 0.8; margin-top: 5px; }
+        .right-panels { display: flex; flex-direction: row; gap: 15px; height: 100%; align-items: flex-start; pointer-events: auto;}
+        #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+        #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
+        .lap-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; font-weight: 900; }
+        .best-lap { color: var(--hrc-red) !important; }
+        .data-panel { display: flex; flex-direction: column; gap: 10px; width: 90px; }
+        .data-box { display: flex; flex-direction: column; align-items: flex-end; }
+        .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; }
+        .val { font-size: 32px; font-weight: 900; line-height: 0.9; }
+        #history-page { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 2000; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        #history-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px; }
+        #history-table th { color: var(--hrc-red); border-bottom: 2px solid var(--hrc-red); padding: 8px; }
+        #history-table td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
+        .close-btn { background: var(--hrc-red); color: white; padding: 15px; text-align: center; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        footer { height: 55px; display: flex; gap: 2px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 1000; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
+        button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 8px; font-weight: bold; cursor: pointer; }
+        button.active { background: var(--hrc-red) !important; border: 1px solid #fff; }
+    </style>
 </head>
 <body>
-
-<div id="dashboard">
-    <canvas id="canvas"></canvas>
-    
-    <div id="debug-overlay">
-        LAT:<span id="debug_lat">0.000</span> LON:<span id="debug_lon">0.000</span> PKT:<span id="debug_pkt">0</span>
-    </div>
-
-    <div class="main-ui-container">
-        <div id="info-overlay">
-            <div id="rpm_val">0</div>
-            <div id="display1">00:00.000</div>
-            <div id="sector-container">
-                <div id="s1_box" class="sec-box">S1: <span id="s1_val">--.---</span></div>
-                <div id="s2_box" class="sec-box">S2: <span id="s2_val">--.---</span></div>
-                <div id="s3_box" class="sec-box">S3: <span id="s3_val">--.---</span></div>
+    <div id="dashboard">
+        <canvas id="canvas"></canvas>
+        <div id="debug-overlay">LAT:<span id="debug_lat">0.000</span> LON:<span id="debug_lon">0.000</span> PKT:<span id="debug_pkt">0</span></div>
+        <div class="main-ui-container">
+            <div id="info-overlay">
+                <div id="rpm_val">0</div>
+                <div id="display1">00:00.000</div>
+                <div id="sector-container">
+                    <div id="s1_box" class="sec-box">S1: <span id="s1_val">--.---</span></div>
+                    <div id="s2_box" class="sec-box">S2: <span id="s2_val">--.---</span></div>
+                    <div id="s3_box" class="sec-box">S3: <span id="s3_val">--.---</span></div>
+                </div>
+                <div id="display">TOTAL 00:00.000</div>
             </div>
-            <div id="display">TOTAL 00:00.000</div>
-        </div>
-        <div class="right-panels">
-            <div id="lap-panel"><div id="lap"></div></div>
-            <div class="data-panel">
-                <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
-                <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color:var(--hrc-orange);">0</div></div>
-                <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
+            <div class="right-panels">
+                <div id="lap-panel"><div id="lap"></div></div>
+                <div class="data-panel">
+                    <div class="data-box"><div class="label">SPEED</div><div class="val" id="speed_val">0</div></div>
+                    <div class="data-box"><div class="label">MAX</div><div class="val" id="max_speed_val" style="color:var(--hrc-orange);">0</div></div>
+                    <div class="data-box"><div class="label">TEMP</div><div class="val" id="temp_val">--</div></div>
+                </div>
             </div>
         </div>
+        <footer>
+            <button id="intGpsBtn">INT GPS</button>
+            <button id="btConnect">BLE START</button>
+            <button id="startBtn">TIMER</button>
+            <button id="lapBtn">LAP/RESET</button>
+            <button id="historyBtn">HISTORY</button>
+            <button id="gpxBtn" style="display:none; background:var(--hrc-orange); color:#000;">GPX SAVE</button>
+            <button id="reloadBtn" onclick="location.reload()">RELOAD</button>
+        </footer>
     </div>
 
-    <footer>
-        <button id="intGpsBtn">INT GPS</button>
-        <button id="btConnect">BLE START</button>
-        <button id="startBtn">TIMER</button>
-        <button id="lapBtn">LAP/RESET</button>
-        <button id="historyBtn">HISTORY</button>
-        <button id="gpxBtn" style="display:none; background:var(--hrc-orange); color:#000;">GPX SAVE</button>
-        <button id="reloadBtn" onclick="location.reload()">RELOAD</button>
-    </footer>
-</div>
-
-<div id="history-page">
-    <div class="close-btn" onclick="document.getElementById('history-page').style.display='none'">CLOSE HISTORY</div>
-    <table id="history-table">
-        <thead><tr><th>LAP</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>TIME</th><th>MAX SPD</th></tr></thead>
-        <tbody id="history-body"></tbody>
-    </table>
-</div>
+    <div id="history-page">
+        <div class="close-btn" onclick="document.getElementById('history-page').style.display='none'">CLOSE HISTORY</div>
+        <table id="history-table">
+            <thead><tr><th>LAP</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>TIME</th><th>MAX SPD</th><th>MAX RPM</th></tr></thead>
+            <tbody id="history-body"></tbody>
+        </table>
+    </div>
 
 <script>
 'use strict';
-// 1. 変数定義（重複なし）
+// --- 1. 基本設定と変数 ---
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], gpsPoints = [];
-let lat = 0, lon = 0, currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeedInLap = 0;
+let lat = 0, lon = 0, currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeedInLap = 0, maxRpmInLap = 0;
 let lastPos = null, isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let lines = { startLine: null, s1Line: null, s2Line: null, s3Line: null };
 let validDirection = null, sectorDirections = { s1: null, s2: null, s3: null };
@@ -117,21 +94,21 @@ let pulsePerRev = 1, cooldownMs = 15000;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// 2. 位置情報処理（一本化）
+// --- 2. 位置情報と判定 (線形補間 & 方向ロック) ---
 function handlePositionUpdate(currLat, currLon, now) {
     if (currLat === 0 && currLon === 0) return;
     document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
     
-    if (swState === 1) { // TIMERが動いている時のみ記録
+    if (swState === 1) {
         if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = currentSpeedKmh;
+        if (currentRPM > maxRpmInLap) maxRpmInLap = currentRPM;
         
-        const cur = { lat: currLat, lon: currLon, time: now, rpm: currentRPM, speed: currentSpeedKmh };
+        const cur = { lat: currLat, lon: currLon, time: now, rpm: currentRPM, temp: currentTemp, speed: currentSpeedKmh };
         gpsPoints.push(cur);
-        
-        // デバッグ表示に記録件数を追加
         document.getElementById('debug_pkt').textContent = gpsPoints.length;
 
         if (lastPos) {
+            // SL判定
             const hitSL = getIntersection(lastPos, cur, lines.startLine);
             if (hitSL) {
                 if (validDirection === null) validDirection = hitSL.dir;
@@ -147,8 +124,8 @@ function handlePositionUpdate(currLat, currLon, now) {
                     if (hit.dir === sectorDirections[s]) {
                         const absT = (hit.time - lapStartTime) / 1000;
                         if (s === 's1' && s1_abs === 0) { s1_abs = absT; lastPassedSectorTime = absT; document.getElementById('s1_val').textContent = s1_abs.toFixed(3); }
-                        else if (s === 's2' && s2_abs === 0) { s2_abs = absT; lastPassedSectorTime = absT; document.getElementById('s2_val').textContent = (s1_abs > 0 ? (s2_abs-s1_abs) : s2_abs).toFixed(3); }
-                        else if (s === 's3' && s3_abs === 0) { s3_abs = absT; lastPassedSectorTime = absT; document.getElementById('s3_val').textContent = (s2_abs > 0 ? (s3_abs-s2_abs) : s3_abs).toFixed(3); }
+                        else if (s === 's2' && s2_abs === 0) { s2_abs = absT; lastPassedSectorTime = absT; document.getElementById('s2_val').textContent = (s2_abs - (s1_abs||0)).toFixed(3); }
+                        else if (s === 's3' && s3_abs === 0) { s3_abs = absT; lastPassedSectorTime = absT; document.getElementById('s3_val').textContent = (s3_abs - (s2_abs||s1_abs||0)).toFixed(3); }
                     }
                 }
             });
@@ -157,110 +134,47 @@ function handlePositionUpdate(currLat, currLon, now) {
     }
 }
 
-// 3. GPX保存処理（Bluefy用調整）
-
+// --- 3. GPX プロ仕様出力 (Garmin規格完全偽装版) ---
 function saveGPX() {
-    console.log("GPX生成開始... ポイント数:", gpsPoints.length);
-    
-    if (!gpsPoints || gpsPoints.length === 0) {
-        alert("走行データがありません。計測してから実行してください。");
-        return;
-    }
+    if (gpsPoints.length < 2) { alert("走行データが不足しています。"); return; }
 
-    try {
-        // --- 1. ラインデータの構築 (メタデータ用) ---
-        const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
-        const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
-        const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
-        const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
-        const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
+    const getL = (k) => {
+        const p1 = localStorage.getItem(k + 'P1Lat');
+        return p1 ? `${p1},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}` : "SKIP";
+    };
+    const lineMeta = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
 
-        // --- 2. GPX文字列の組み立て (+= で結合) ---
-        let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
-        gpx += '<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
-        gpx += `  <metadata><desc>${metaLineData}</desc></metadata>\n`;
-        gpx += `  <trk><name>Log_${new Date().toLocaleString()}</name><trkseg>\n`;
-        
-        gpsPoints.forEach(p => {
-            const timeStr = new Date(p.time).toISOString();
-            gpx += `    <trkpt lat="${p.lat}" lon="${p.lon}">`;
-            gpx += `<time>${timeStr}</time>`;
-            gpx += `<speed>${(p.speed / 3.6).toFixed(2)}</speed>`;
-            gpx += `<extensions><rpm>${Math.floor(p.rpm || 0)}</rpm></extensions>`;
-            gpx += `</trkpt>\n`;
-        });
-        
-        gpx += '  </trkseg></trk>\n</gpx>';
+    // プロ仕様：解析ソフトが自動でラインを引くためのヘッダー
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_DEGI_V5" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+  <metadata>
+    <name>RaceSession_${new Date().toISOString()}</name>
+    <desc>LINE_DATA[${lineMeta}]</desc>
+  </metadata>
+  <trk><name>LogData</name><trkseg>`;
 
-        // --- 3. レスポンシブなコピー画面の作成 ---
-        const div = document.createElement('div');
-        div.id = "gpx-copy-overlay";
-        // 画面いっぱいに広がるスタイル
-        div.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:10px;";
-
-        div.innerHTML = `
-            <div style="background:#fff; width:100%; max-width:500px; height:95%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-                <h2 style="margin:0 0 10px 0; font-size:1.4em; text-align:center;">ログのコピー</h2>
-                <p style="font-size:12px; color:#d9534f; font-weight:bold; margin-bottom:10px; text-align:center;">
-                    Bluefy制限のため、直接保存できません。<br>下を全選択してコピーしてください。
-                </p>
-                
-                <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:12px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; box-sizing:border-box; margin-bottom:15px; outline:none; -webkit-overflow-scrolling:touch;">${gpx}</textarea>
-                
-                <button id="btnJump" style="width:100%; height:70px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em; cursor:pointer;">① コピーしてSafariへ移動</button>
-                
-                <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px; font-size:1em; cursor:pointer;">キャンセル</button>
-            </div>
-        `;
-        document.body.appendChild(div);
-
-        // --- 4. コピー ＆ ショートカット起動処理 ---
-        document.getElementById('btnJump').onclick = function() {
-            const textArea = document.getElementById('copyTag');
-            
-            // iPhoneでの強制全選択処理
-            textArea.focus();
-            textArea.setSelectionRange(0, 999999);
-            const successful = document.execCommand('copy');
-            
-            if (successful) {
-                alert("クリップボードにコピーしました！\nOKを押すとSafari保存ページを案内します。");
-                
-                // iOSショートカットの起動試行 (OpenExport という名前のショートカット)
-                window.location.href = "shortcuts://run-shortcut?name=OpenExport";
-                
-                // ショートカットが反応しない場合の予備（2秒後にURLへ）
-                setTimeout(() => {
-                    if(confirm("Safariは起動しましたか？\n起動しない場合は手動でSafariを開き、export.htmlを表示してください。")) {
-                        window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
-                    }
-                }, 2000);
-            } else {
-                alert("コピーに失敗しました。手動で選択してコピーしてください。");
-            }
-        };
-
-    } catch (err) {
-        alert("システムエラー: " + err.message);
-    }
-}
-// --- 以下、補助関数 ---
-function initLines() {
-    ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
-        const p1Lat = localStorage.getItem(key + 'P1Lat');
-        if (p1Lat) {
-            lines[key] = {
-                p1: { lat: parseFloat(p1Lat), lon: parseFloat(localStorage.getItem(key + 'P1Lon')) },
-                p2: { lat: parseFloat(localStorage.getItem(key + 'P2Lat')), lon: parseFloat(localStorage.getItem(key + 'P2Lon')) }
-            };
-            const box = document.getElementById(key.replace('Line', '') + '_box');
-            if (box) box.style.display = 'block';
-        }
+    const baseTime = gpsPoints[0].time;
+    gpsPoints.forEach(p => {
+        // プロ仕様：2000年基準のISO時刻（解析ソフトでの比較を容易にする）
+        const relTime = new Date(946684800000 + (p.time - baseTime)).toISOString();
+        gpx += `
+    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">
+      <time>${relTime}</time>
+      <speed>${(p.speed / 3.6).toFixed(2)}</speed>
+      <extensions>
+        <gpxtpx:TrackPointExtension>
+          <gpxtpx:atemp>${p.temp}</gpxtpx:atemp>
+          <gpxtpx:hr>${Math.round(p.rpm)}</gpxtpx:hr>
+        </gpxtpx:TrackPointExtension>
+      </extensions>
+    </trkpt>`;
     });
-    pulsePerRev = parseFloat(localStorage.getItem('pl1')) || 1;
-    cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 15000;
+
+    gpx += `\n  </trkseg></trk>\n</gpx>`;
+    showCopyOverlay(gpx);
 }
 
+// --- 以下、ロジック補助関数 ---
 function getIntersection(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -269,18 +183,65 @@ function getIntersection(p1, p2, line) {
     if (Math.abs(den) < 1e-12) return null;
     const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den;
     const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den;
+    // uの範囲を±20%に絞り、コース外の誤爆を防ぐ
     if (t >= 0 && t <= 1 && u >= -0.2 && u <= 1.2) {
         return { time: p1.time + (p2.time - p1.time) * t, dir: ((x4 - x3) * (y2 - y1) - (y4 - y3) * (x2 - x1)) > 0 ? 1 : -1 };
     }
     return null;
 }
 
+function processLap(hitTime, useFreeze) {
+    const lapTimeMs = hitTime - (lapStartTime || startTime);
+    const s4 = lastPassedSectorTime > 0 ? ((lapTimeMs/1000) - lastPassedSectorTime).toFixed(3) : "--.---";
+    
+    const lapData = { 
+        no: lapRecords.length + 1, 
+        time: lapTimeMs, 
+        max: Math.round(maxSpeedInLap), 
+        maxRpm: Math.round(maxRpmInLap),
+        s1: document.getElementById('s1_val').textContent, 
+        s2: document.getElementById('s2_val').textContent, 
+        s3: document.getElementById('s3_val').textContent, 
+        s4: s4 
+    };
+    
+    lapRecords.unshift(lapData);
+    updateLapList();
+    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTimeMs); freezeUntil = Date.now() + 10000; }
+    lapStartTime = hitTime; maxSpeedInLap = 0; maxRpmInLap = 0; s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
+    // 表示リセット
+    ['s1_val','s2_val','s3_val'].forEach(id => document.getElementById(id).textContent = "--.---");
+}
+
+function updateLapList() {
+    const best = Math.min(...lapRecords.map(r => r.time));
+    document.getElementById('lap').innerHTML = lapRecords.map(r => `<div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}"><span>L${r.no}</span><span>${timeFormat(r.time)}</span></div>`).join('');
+}
+
+function showCopyOverlay(gpx) {
+    const overlay = document.createElement('div');
+    overlay.id = "gpx-copy-overlay";
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:15px;";
+    overlay.innerHTML = `
+        <div style="background:#fff; width:100%; max-width:550px; height:90%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box;">
+            <h2 style="margin:0 0 10px 0; font-size:1.2em; text-align:center;">GPX (Professional Sync)</h2>
+            <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:10px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; margin-bottom:15px; outline:none;">${gpx}</textarea>
+            <button id="btnCopyFinal" style="width:100%; height:75px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em;">コピーしてSafari/保存ページへ</button>
+            <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px;">キャンセル</button>
+        </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('btnCopyFinal').onclick = function() {
+        const textArea = document.getElementById('copyTag');
+        textArea.select(); textArea.setSelectionRange(0, 999999);
+        document.execCommand('copy');
+        alert("コピー完了！Safari等のブラウザで保存してください。");
+        window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
+    };
+}
+
+// GPS / BLE / MainLoop 等はV4.6の構造を継承しつつ最適化
 async function toggleInternalGps() {
-    if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId); watchId = null;
-        document.getElementById('intGpsBtn').classList.remove('active');
-        return;
-    }
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; document.getElementById('intGpsBtn').classList.remove('active'); return; }
     document.getElementById('intGpsBtn').classList.add('active');
     watchId = navigator.geolocation.watchPosition(pos => {
         const now = Date.now();
@@ -307,29 +268,11 @@ async function ble() {
                 currentSpeedKmh = d.getUint16(8, true);
                 currentTemp = d.getUint8(10);
                 currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
-                document.getElementById('debug_lat').textContent = lat.toFixed(6);
-                document.getElementById('debug_lon').textContent = lon.toFixed(6);
-                document.getElementById('temp_val').textContent = currentTemp;
                 handlePositionUpdate(lat, lon, now);
             }
         });
         await char.startNotifications();
     } catch (e) { alert("BLE Error: " + e.message); }
-}
-
-function processLap(hitTime, useFreeze) {
-    const lapTimeMs = hitTime - (lapStartTime || startTime);
-    const s4 = lastPassedSectorTime > 0 ? ((lapTimeMs/1000) - lastPassedSectorTime).toFixed(3) : "--.---";
-    const lapData = { no: lapRecords.length + 1, time: lapTimeMs, max: Math.round(maxSpeedInLap), s1: document.getElementById('s1_val').textContent, s2: document.getElementById('s2_val').textContent, s3: document.getElementById('s3_val').textContent, s4: s4 };
-    lapRecords.unshift(lapData);
-    updateLapList();
-    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTimeMs); freezeUntil = Date.now() + 10000; }
-    lapStartTime = hitTime; maxSpeedInLap = 0; s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
-}
-
-function updateLapList() {
-    const best = Math.min(...lapRecords.map(r => r.time));
-    document.getElementById('lap').innerHTML = lapRecords.map(r => `<div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}"><span>L${r.no}</span><span>${timeFormat(r.time)}</span></div>`).join('');
 }
 
 function mainLoop() {
@@ -361,113 +304,39 @@ function mainLoop() {
 
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
 
-// 4. イベント登録（Bluefy用）
-document.getElementById('intGpsBtn').addEventListener('click', toggleInternalGps);
-document.getElementById('btConnect').addEventListener('click', ble);
-document.getElementById('startBtn').addEventListener('click', function() {
-    if (swState !== 1) {
-        swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; lastPos = null;
-        this.classList.add('active');
-        document.getElementById('gpxBtn').style.display = 'none';
-    } else {
-        swState = 2;
-        this.classList.remove('active');
-        document.getElementById('gpxBtn').style.display = 'block';
-    }
-});
-document.getElementById('lapBtn').addEventListener('click', () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); });
-// --- 6. GPX SAVE ボタンの修正 (Bluefy/Safariリレー対応版) ---
-document.getElementById('gpxBtn').onclick = () => {
-    if (gpsPoints.length === 0) return;
-
-    // 仕様書通り localStorage から座標を取得して desc に格納
-    const getL = (k) => {
-        const p1 = localStorage.getItem(k + 'P1Lat');
-        return p1 ? `${p1},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}` : "SKIP";
-    };
-    const lineMeta = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
-
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-    gpx += `<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">\n`;
-    gpx += `  <metadata><desc>LINE_DATA[${lineMeta}]</desc></metadata>\n`;
-    gpx += `  <trk><name>RaceLog_${Date.now()}</name><trkseg>\n`;
-
-    const base = gpsPoints[0].time;
-    gpsPoints.forEach(p => {
-        const relTime = new Date(946684800000 + (p.time - base)).toISOString();
-        gpx += `    <trkpt lat="${p.lat}" lon="${p.lon}">`;
-        gpx += `<time>${relTime}</time>`;
-        gpx += `<speed>${(p.speed / 3.6).toFixed(2)}</speed>`;
-        gpx += `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${Math.round(p.rpm || 0)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>`;
-        gpx += `</trkpt>\n`;
-    });
-    gpx += `  </trkseg></trk>\n</gpx>`;
-
-    // --- 以下、前回作成した「Bluefy用コピー画面」の表示処理へ続く ---
-    showCopyOverlay(gpx); 
+// イベント紐付け
+document.getElementById('intGpsBtn').onclick = toggleInternalGps;
+document.getElementById('btConnect').onclick = ble;
+document.getElementById('gpxBtn').onclick = saveGPX;
+document.getElementById('startBtn').onclick = function() {
+    if (swState !== 1) { swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; lastPos = null; validDirection = null; this.classList.add('active'); document.getElementById('gpxBtn').style.display = 'none'; }
+    else { swState = 2; this.classList.remove('active'); document.getElementById('gpxBtn').style.display = 'block'; }
 };
-
-// 重複を避けるためコピー画面表示を関数化
-function showCopyOverlay(gpx) {
-    const overlay = document.createElement('div');
-    overlay.id = "gpx-copy-overlay";
-    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:15px;";
-    overlay.innerHTML = `
-        <div style="background:#fff; width:100%; max-width:550px; height:90%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box;">
-            <h2 style="margin:0 0 10px 0; font-size:1.4em; text-align:center;">GPXコピー</h2>
-            <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:12px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; margin-bottom:15px; outline:none;">${gpx}</textarea>
-            <button id="btnCopyFinal" style="width:100%; height:75px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em;">コピーしてSafariへ移動</button>
-            <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px;">キャンセル</button>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    document.getElementById('btnCopyFinal').onclick = function() {
-        const textArea = document.getElementById('copyTag');
-        textArea.select();
-        textArea.setSelectionRange(0, 999999);
-        document.execCommand('copy');
-        alert("コピー完了！Safariで保存してください。");
-        window.location.href = "shortcuts://run-shortcut?name=OpenExport";
-    };
-}
-// --- 5. HISTORY 表示の修正 (RPM対応) ---
-document.getElementById('historyBtn').onclick = function() {
+document.getElementById('lapBtn').onclick = () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET ALL?")) location.reload(); };
+document.getElementById('historyBtn').onclick = () => {
     if (lapRecords.length === 0) return;
-
-    // 各項目のベスト値を算出
-    const getBest = (key) => {
-        const values = lapRecords.map(r => parseFloat(r[key])).filter(v => !isNaN(v));
-        return values.length > 0 ? Math.min(...values) : null;
-    };
-
-    const bestTotal = Math.min(...lapRecords.map(r => r.time));
-    const bestS1 = getBest('s1');
-    const bestS2 = getBest('s2');
-    const bestS3 = getBest('s3');
-    const bestS4 = getBest('s4');
-
+    const getBest = (key) => { const vals = lapRecords.map(r => parseFloat(r[key])).filter(v => !isNaN(v)); return vals.length > 0 ? Math.min(...vals) : null; };
+    const bT = Math.min(...lapRecords.map(r => r.time)), b1 = getBest('s1'), b2 = getBest('s2'), b3 = getBest('s3'), b4 = getBest('s4');
     document.getElementById('history-body').innerHTML = lapRecords.map(r => {
-        const isBestLap = r.time === bestTotal;
-        // 各セクターがベスト値かどうか判定する関数
-        const checkBest = (val, best) => (parseFloat(val) === best) ? `style="color:var(--hrc-red); font-weight:bold;"` : "";
-
-        return `
-            <tr style="${isBestLap ? 'background:rgba(228,0,43,0.15);' : ''}">
-                <td>${r.no}</td>
-                <td ${checkBest(r.s1, bestS1)}>${r.s1}</td>
-                <td ${checkBest(r.s2, bestS2)}>${r.s2}</td>
-                <td ${checkBest(r.s3, bestS3)}>${r.s3}</td>
-                <td ${checkBest(r.s4, bestS4)}>${r.s4}</td>
-                <td style="${isBestLap ? 'color:var(--hrc-red); font-weight:bold;' : ''}">${timeFormat(r.time)}</td>
-                <td>${r.max}</td>
-                <td>${Math.round(r.maxRpm || 0)}</td>
-            </tr>`;
+        const isB = r.time === bT;
+        const cB = (v, b) => (parseFloat(v) === b) ? `style="color:var(--hrc-red); font-weight:bold;"` : "";
+        return `<tr style="${isB ? 'background:rgba(228,0,43,0.15);' : ''}"><td>${r.no}</td><td ${cB(r.s1,b1)}>${r.s1}</td><td ${cB(r.s2,b2)}>${r.s2}</td><td ${cB(r.s3,b3)}>${r.s3}</td><td ${cB(r.s4,b4)}>${r.s4}</td><td style="${isB ? 'color:var(--hrc-red);' : ''}">${timeFormat(r.time)}</td><td>${r.max}</td><td>${r.maxRpm}</td></tr>`;
     }).join('');
-    
     document.getElementById('history-page').style.display = 'block';
 };
-window.onload = () => { initLines(); mainLoop(); };
+
+window.onload = () => {
+    ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
+        const p1Lat = localStorage.getItem(key + 'P1Lat');
+        if (p1Lat) {
+            lines[key] = { p1: { lat: parseFloat(p1Lat), lon: parseFloat(localStorage.getItem(key + 'P1Lon')) }, p2: { lat: parseFloat(localStorage.getItem(key + 'P2Lat')), lon: parseFloat(localStorage.getItem(key + 'P2Lon')) } };
+            const box = document.getElementById(key.replace('Line', '') + '_box'); if (box) box.style.display = 'block';
+        }
+    });
+    pulsePerRev = parseFloat(localStorage.getItem('pl1')) || 1;
+    cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 15000;
+    mainLoop();
+};
 </script>
 </body>
 </html>
