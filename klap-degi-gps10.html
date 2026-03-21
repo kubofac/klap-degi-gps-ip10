@@ -160,28 +160,27 @@ function handlePositionUpdate(currLat, currLon, now) {
 // 3. GPX保存処理（Bluefy用調整）
 
 function saveGPX() {
-    console.log("Saving GPX... Points count:", gpsPoints.length);
+    console.log("GPX生成開始... ポイント数:", gpsPoints.length);
     
     if (!gpsPoints || gpsPoints.length === 0) {
-        alert("データが0件です。走行ログが記録されていません。");
+        alert("走行データがありません。計測してから実行してください。");
         return;
     }
 
     try {
-        // --- 1. ラインデータの構築 ---
+        // --- 1. ラインデータの構築 (メタデータ用) ---
         const sl = (lines && lines.startLine) ? `${lines.startLine.p1.lat},${lines.startLine.p1.lon},${lines.startLine.p2.lat},${lines.startLine.p2.lon}` : "SKIP";
         const s1 = (lines && lines.s1Line) ? `${lines.s1Line.p1.lat},${lines.s1Line.p1.lon},${lines.s1Line.p2.lat},${lines.s1Line.p2.lon}` : "SKIP";
         const s2 = (lines && lines.s2Line) ? `${lines.s2Line.p1.lat},${lines.s2Line.p1.lon},${lines.s2Line.p2.lat},${lines.s2Line.p2.lon}` : "SKIP";
         const s3 = (lines && lines.s3Line) ? `${lines.s3Line.p1.lat},${lines.s3Line.p1.lon},${lines.s3Line.p2.lat},${lines.s3Line.p2.lon}` : "SKIP";
         const metaLineData = `LINE_DATA[SL:${sl}|S1:${s1}|S2:${s2}|S3:${s3}]`;
 
-        // --- 2. GPX文字列の組み立て (+= で後ろに付け足していく) ---
+        // --- 2. GPX文字列の組み立て (+= で結合) ---
         let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
         gpx += '<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n';
         gpx += `  <metadata><desc>${metaLineData}</desc></metadata>\n`;
         gpx += `  <trk><name>Log_${new Date().toLocaleString()}</name><trkseg>\n`;
         
-        // 走行ポイントを1つずつ追加
         gpsPoints.forEach(p => {
             const timeStr = new Date(p.time).toISOString();
             gpx += `    <trkpt lat="${p.lat}" lon="${p.lon}">`;
@@ -191,42 +190,58 @@ function saveGPX() {
             gpx += `</trkpt>\n`;
         });
         
-        gpx += '  </trkseg></trk>\n</gpx>'; // 最後に閉じタグを追加
+        gpx += '  </trkseg></trk>\n</gpx>';
 
-        // --- 3. コピー用画面の表示 ---
+        // --- 3. レスポンシブなコピー画面の作成 ---
         const div = document.createElement('div');
-        div.style = "position:fixed;top:5%;left:5%;width:90%;height:90%;background:white;color:black;z-index:99999;padding:20px;border-radius:15px;box-shadow:0 0 20px rgba(0,0,0,0.5);overflow-y:auto;text-align:center;";
+        div.id = "gpx-copy-overlay";
+        // 画面いっぱいに広がるスタイル
+        div.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:#333; z-index:99999; display:flex; justify-content:center; align-items:center; box-sizing:border-box; padding:10px;";
+
         div.innerHTML = `
-            <h2 style="margin-top:0;color:#333;">ログのコピー</h2>
-            <p style="font-size:12px;color:red;">下を<b>全選択してコピー</b>してください。<br>（XMLの最後 <b>&lt;/gpx&gt;</b> まであるか確認）</p>
-            <textarea id="copyTag" style="width:100%;height:55%;font-size:10px;font-family:monospace;background:#f8f8f8;border:1px solid #ccc;">${gpx}</textarea>
-            <button onclick="copyAndJump()" style="width:100%;padding:18px;margin-top:10px;background:#28a745;color:white;font-weight:bold;border:none;border-radius:10px;font-size:16px;">コピーしてSafari保存ページへ</button>
-            <button onclick="this.parentElement.remove()" style="width:100%;padding:10px;margin-top:10px;background:#999;color:white;border:none;border-radius:10px;">キャンセル</button>
+            <div style="background:#fff; width:100%; max-width:500px; height:95%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+                <h2 style="margin:0 0 10px 0; font-size:1.4em; text-align:center;">ログのコピー</h2>
+                <p style="font-size:12px; color:#d9534f; font-weight:bold; margin-bottom:10px; text-align:center;">
+                    Bluefy制限のため、直接保存できません。<br>下を全選択してコピーしてください。
+                </p>
+                
+                <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-size:12px; font-family:monospace; background:#f4f4f4; border:1px solid #ccc; border-radius:8px; padding:10px; box-sizing:border-box; margin-bottom:15px; outline:none; -webkit-overflow-scrolling:touch;">${gpx}</textarea>
+                
+                <button id="btnJump" style="width:100%; height:70px; margin-bottom:12px; background:#28a745; color:white; font-weight:bold; border:none; border-radius:12px; font-size:1.1em; cursor:pointer;">① コピーしてSafariへ移動</button>
+                
+                <button onclick="document.getElementById('gpx-copy-overlay').remove()" style="width:100%; height:50px; background:#6c757d; color:white; border:none; border-radius:12px; font-size:1em; cursor:pointer;">キャンセル</button>
+            </div>
         `;
         document.body.appendChild(div);
 
-        // --- 4. コピー＆ジャンプ処理 ---
-        window.copyAndJump = function() {
+        // --- 4. コピー ＆ ショートカット起動処理 ---
+        document.getElementById('btnJump').onclick = function() {
             const textArea = document.getElementById('copyTag');
-            textArea.select();
-            textArea.setSelectionRange(0, 999999); // iPhone用強制全選択
-            document.execCommand('copy');
             
-            alert("コピーしました！\nOKを押すとSafari用ページへの案内を開始します。");
+            // iPhoneでの強制全選択処理
+            textArea.focus();
+            textArea.setSelectionRange(0, 999999);
+            const successful = document.execCommand('copy');
             
-            // ショートカット連携 (設定済みの場合) または URL移動
-            window.location.href = "shortcuts://run-shortcut?name=OpenExport";
-            
-            // 予備：ショートカットがない場合のために2秒後に直接URLへ（Bluefy内で開く可能性あり）
-            setTimeout(() => {
-                if(confirm("Safariが起動しましたか？\n起動しない場合は、手動でSafariを開いて export.html へ貼り付けてください。")) {
-                    window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
-                }
-            }, 2000);
+            if (successful) {
+                alert("クリップボードにコピーしました！\nOKを押すとSafari保存ページを案内します。");
+                
+                // iOSショートカットの起動試行 (OpenExport という名前のショートカット)
+                window.location.href = "shortcuts://run-shortcut?name=OpenExport";
+                
+                // ショートカットが反応しない場合の予備（2秒後にURLへ）
+                setTimeout(() => {
+                    if(confirm("Safariは起動しましたか？\n起動しない場合は手動でSafariを開き、export.htmlを表示してください。")) {
+                        window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
+                    }
+                }, 2000);
+            } else {
+                alert("コピーに失敗しました。手動で選択してコピーしてください。");
+            }
         };
 
     } catch (err) {
-        alert("GPX生成エラー: " + err.message);
+        alert("システムエラー: " + err.message);
     }
 }
 // --- 以下、補助関数 ---
