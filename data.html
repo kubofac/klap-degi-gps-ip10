@@ -3,174 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>GPX ANALYZER & EXPORT</title>
+    <title>GPX ANALYZER</title>
     <style>
-        :root {
-            --hrc-red: #E4002B;
-            --hrc-blue: #004098;
-            --bg-dark: #000000;
-            --panel-bg: #1a1a1a;
-            --success-green: #28a745;
-        }
+        :root { --hrc-red: #E4002B; --bg-dark: #000000; --success-green: #28a745; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { 
-            font-family: 'Arial Black', sans-serif; 
-            background: var(--bg-dark); color: #fff; 
-            margin: 0; padding: 20px;
-            display: flex; flex-direction: column; height: 100dvh;
-        }
-        h2 { color: var(--hrc-red); margin: 10px 0 5px 0; font-size: 1.8rem; text-align: center; font-style: italic; }
-        p { font-size: 0.85rem; color: #888; text-align: center; margin-bottom: 20px; }
-        
-        /* インポートアクションエリア */
-        .action-group {
-            display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;
-        }
-
-        .btn-main {
-            width: 100%; height: 75px;
-            color: white; border: none; border-radius: 15px;
-            font-size: 1.3rem; font-weight: 900;
-            cursor: pointer; transition: 0.2s;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
-        #pasteBtn { 
-            background: var(--hrc-red); 
-            box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4);
-        }
-        #pasteBtn:active { transform: scale(0.97); filter: brightness(1.2); }
-        
-        .btn-secondary {
-            background: #333; height: 50px; border-radius: 10px; color: #ccc;
-            border: 1px solid #444; font-size: 0.9rem; font-weight: bold;
-        }
-
-        textarea {
-            width: 100%; flex-grow: 1;
-            background: #0a0a0a; color: #0f0;
-            border: 1px solid #333; border-radius: 12px;
-            padding: 15px; font-family: 'Courier New', monospace; font-size: 12px;
-            margin-bottom: 20px; outline: none; resize: none;
-        }
-        textarea:focus { border-color: var(--hrc-red); }
-
-        .status-msg {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--success-green); padding: 10px 20px; border-radius: 20px;
-            font-size: 0.9rem; font-weight: bold; display: none; z-index: 100;
-        }
-
-        .footer-links {
-            display: flex; justify-content: space-between; padding: 10px 0;
-            margin-bottom: env(safe-area-inset-bottom);
-        }
-        .footer-links a { color: #666; text-decoration: none; font-size: 0.8rem; }
+        body { font-family: 'Arial Black', sans-serif; background: var(--bg-dark); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100dvh; }
+        h2 { color: var(--hrc-red); margin: 10px 0; text-align: center; font-style: italic; }
+        .btn-main { width: 100%; height: 80px; background: var(--hrc-red); color: white; border: none; border-radius: 20px; font-size: 1.4rem; font-weight: 900; box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4); margin-bottom: 20px; }
+        textarea { width: 100%; flex-grow: 1; background: #111; color: #0f0; border: 1px solid #333; border-radius: 12px; padding: 15px; font-family: monospace; font-size: 12px; margin-bottom: 20px; outline: none; }
     </style>
 </head>
 <body>
 
-    <div id="toast" class="status-msg">COPIED & READY</div>
-
     <h2>GPX ANALYZER</h2>
-    <p>走行ログをペーストして解析・保存します</p>
+    <p style="text-align:center; font-size:12px; color:#888;">iPhone 8 / Bluefy 最適化版</p>
 
-    <div class="action-group">
-        <button id="pasteBtn" class="btn-main" onclick="handlePasteAndSave()">
-            📋 PASTE & SAVE GPX
-        </button>
-    </div>
+    <button id="pasteBtn" class="btn-main" onclick="superPaste()">
+        📋 TAP TO IMPORT
+    </button>
 
-    <textarea id="input" placeholder="ここにGPXデータを貼り付けてください..."></textarea>
-
-    <div class="footer-links">
-        <a href="#" onclick="document.getElementById('input').value=''; return false;">入力クリア</a>
-        <a href="https://klap-degi-gps-ip10.vercel.app/index.html">← 計測画面に戻る</a>
-    </div>
+    <textarea id="input" placeholder="ここにGPXを貼り付け..."></textarea>
 
     <script>
-        // クリップボードからの読み取りと保存の統合処理
-        async function handlePasteAndSave() {
+        async function superPaste() {
+            const area = document.getElementById('input');
             const btn = document.getElementById('pasteBtn');
-            const textarea = document.getElementById('input');
 
             try {
-                // 1. クリップボードの読み取り (Bluefy/Safari対応)
-                let text = "";
-                try {
-                    text = await navigator.clipboard.readText();
-                } catch (e) {
-                    // クリップボードAPIが使えない場合はテキストエリアの内容を確認
-                    text = textarea.value.trim();
+                // 手順1: Clipboard APIを試みる
+                const text = await navigator.clipboard.readText();
+                if (text && text.includes('<gpx')) {
+                    area.value = text;
+                    executeSave(text);
+                    return;
                 }
-
-                if (!text || !text.includes('<gpx')) {
-                    if (textarea.value.includes('<gpx')) {
-                        text = textarea.value.trim();
-                    } else {
-                        alert("有効なGPXデータが見つかりません。\n計測画面でGPXコピーを行ってください。");
-                        return;
-                    }
-                }
-
-                // テキストエリアに反映
-                textarea.value = text;
-                
-                // 2. 保存処理の実行
-                saveGPX(text);
-
-            } catch (err) {
-                console.error(err);
-                alert("データの読み取りに失敗しました。手動で貼り付けてください。");
-            }
-        }
-
-        function saveGPX(txt) {
-            try {
-                const blob = new Blob([txt], { type: 'application/gpx+xml' });
-                const url = URL.createObjectURL(blob);
-                
-                // ファイル名の生成 (Log_YYYYMMDD_HHMM.gpx)
-                const now = new Date();
-                const dateStr = now.getFullYear() + 
-                                String(now.getMonth() + 1).padStart(2, '0') + 
-                                String(now.getDate()).padStart(2, '0') + "_" +
-                                String(now.getHours()).padStart(2, '0') + 
-                                String(now.getMinutes()).padStart(2, '0');
-                
-                const fileName = `Log_${dateStr}.gpx`;
-
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                
-                // 視覚的フィードバック
-                const toast = document.getElementById('toast');
-                toast.textContent = "SAVED: " + fileName;
-                toast.style.display = "block";
-                
-                const btn = document.getElementById('pasteBtn');
-                btn.style.background = "var(--success-green)";
-                btn.textContent = "✅ SUCCESS";
-
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    toast.style.display = "none";
-                    btn.style.background = "var(--hrc-red)";
-                    btn.textContent = "📋 PASTE & SAVE GPX";
-                }, 3000);
-
             } catch (e) {
-                alert("保存エラー: " + e.message);
+                console.log("Clipboard API blocked, using manual focus.");
+            }
+
+            // 手順2: Clipboard APIがダメな場合 (iPhone 8 / Safari制限)
+            // テキストエリアに一旦フォーカスさせ、ユーザーにペーストを促すか、
+            // すでにエリアに文字があればそれを採用する
+            if (area.value.includes('<gpx')) {
+                executeSave(area.value);
+            } else {
+                area.focus();
+                alert("ブラウザの制限で自動ペーストができませんでした。\n入力エリアを長押しして『ペースト』してから、もう一度ボタンを押してください。");
             }
         }
 
-        // ページ読み込み時にテキストエリアにフォーカス（手動ペースト準備）
-        window.onload = () => {
-            document.getElementById('input').focus();
-        };
+        function executeSave(txt) {
+            const blob = new Blob([txt.trim()], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const now = new Date();
+            const timeStr = now.getHours() + "" + now.getMinutes();
+            
+            a.href = url;
+            a.download = `Log_${timeStr}.gpx`;
+            document.body.appendChild(a);
+            a.click();
+            
+            const btn = document.getElementById('pasteBtn');
+            btn.style.background = "#28a745";
+            btn.textContent = "✅ SAVED!";
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                btn.style.background = "#E4002B";
+                btn.textContent = "📋 TAP TO IMPORT";
+            }, 2000);
+        }
     </script>
 </body>
 </html>
