@@ -3,65 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>GPX ANALYZER</title>
+    <title>GPX ONE-TAP SAVE</title>
     <style>
         :root { --hrc-red: #E4002B; --bg-dark: #000; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Arial Black', sans-serif; background: var(--bg-dark); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100dvh; }
-        h2 { color: var(--hrc-red); text-align: center; font-style: italic; margin-bottom: 5px; }
-        .btn-main { 
-            width: 100%; height: 80px; background: var(--hrc-red); color: white; border: none; 
-            border-radius: 20px; font-size: 1.4rem; font-weight: 900; 
-            box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4); margin-bottom: 20px; 
-        }
-        textarea { 
-            width: 100%; flex-grow: 1; background: #111; color: #0f0; 
-            border: 1px solid #333; border-radius: 12px; padding: 15px; 
-            font-family: monospace; font-size: 13px; outline: none;
-        }
+        body { font-family: sans-serif; background: var(--bg-dark); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .btn-main { width: 90%; height: 100px; background: var(--hrc-red); color: white; border: none; border-radius: 20px; font-size: 1.5rem; font-weight: 900; box-shadow: 0 5px 25px rgba(224, 0, 43, 0.5); }
+        #status { margin-top: 20px; font-size: 14px; color: #888; }
+        textarea { width: 1px; height: 1px; opacity: 0; position: absolute; } /* 隠し要素 */
     </style>
 </head>
 <body>
 
-    <h2>GPX ANALYZER</h2>
-    <p style="text-align:center; font-size:11px; color:#888;">iPhone 8 / Bluefy 動作保証版</p>
-
-    <button id="pasteBtn" class="btn-main">📋 IMPORT & SAVE</button>
-
-    <textarea id="input" placeholder="ここにGPXを貼り付け..."></textarea>
+    <button id="mainBtn" class="btn-main">TAP TO<br>IMPORT & SAVE</button>
+    <div id="status">READY</div>
+    
+    <textarea id="hiddenInput"></textarea>
 
     <script>
-        document.getElementById('pasteBtn').addEventListener('click', async function() {
-            const area = document.getElementById('input');
+        document.getElementById('mainBtn').addEventListener('click', async function() {
+            const status = document.getElementById('status');
             const btn = this;
 
             try {
-                // 【最重要】iOSでポップアップを出すための直接呼び出し
-                // 実行すると「"Bluefy"に他のAppからコピーした内容を読み取らせますか？」が出ます
+                // 【重要】iOS Safariで「許可」ポップアップを出すための直接命令
                 const text = await navigator.clipboard.readText();
                 
                 if (text && text.includes('<gpx')) {
-                    area.value = text;
-                    executeSave(text);
+                    status.textContent = "GPX DETECTED. SAVING...";
+                    saveFile(text);
                 } else {
-                    alert("クリップボードにGPXデータがありません。\nロガー側で再度コピーしてください。");
+                    // クリップボードが空、またはGPXでない場合
+                    alert("クリップボードにGPXデータが見つかりません。\nロガー側で再度コピーしてください。");
                 }
             } catch (err) {
-                // Clipboard APIが完全に拒否された場合の挙動
-                console.error("Clipboard Error:", err);
+                // 権限エラーの場合：手動操作への誘導
+                console.error(err);
+                status.textContent = "ACCESS DENIED";
                 
-                // すでに手動でペーストされている場合
-                if (area.value.includes('<gpx')) {
-                    executeSave(area.value);
-                } else {
-                    // iPhone 8 の古いiOSの場合の最終手段
-                    area.focus();
-                    alert("【ヒント】\n下の黒い枠を1回タップして『ペースト』を選び、その後にこのボタンをもう一度押してください。");
-                }
+                // 【iPhone 8 特有の回避策】
+                // 1. 隠しテキストエリアにフォーカスを当てる
+                const hidden = document.getElementById('hiddenInput');
+                hidden.focus();
+                
+                // 2. ユーザーに「一度だけ」手動操作を促す
+                alert("【iPhone 8 設定】\n1. 上に出る『貼り付けを許可』を押してください。\n\n出ない場合は、下の『READY』付近を長押ししてペーストし、もう一度ボタンを押してください。");
             }
         });
 
-        function executeSave(txt) {
+        function saveFile(txt) {
             const blob = new Blob([txt.trim()], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -71,16 +60,19 @@
             a.href = url;
             a.download = `Log_${timeStr}.gpx`;
             document.body.appendChild(a);
+            
+            // Safariでダウンロードを確実に実行させる
             a.click();
             
-            this.style.background = "#28a745";
-            this.textContent = "✅ SAVED!";
+            document.getElementById('mainBtn').style.background = "#28a745";
+            document.getElementById('mainBtn').textContent = "✅ SUCCESS";
             
             setTimeout(() => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                this.style.background = "var(--hrc-red)";
-                this.textContent = "📋 IMPORT & SAVE";
+                document.getElementById('mainBtn').style.background = "var(--hrc-red)";
+                document.getElementById('mainBtn').textContent = "TAP TO IMPORT & SAVE";
+                document.getElementById('status').textContent = "SAVED TO DOWNLOADS";
             }, 3000);
         }
     </script>
