@@ -266,17 +266,54 @@ function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.flo
 
 function showCopyOverlay(gpx) {
     const ov = document.createElement('div');
-    ov.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99999; display:flex; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;";
-    ov.innerHTML = `<div style="background:#fff; width:100%; max-width:500px; height:90%; border-radius:15px; padding:20px; display:flex; flex-direction:column; box-sizing:border-box;">
-        <h2 style="color:#000; margin-top:0;">GPX COPY (Safari Relay)</h2>
-        <textarea id="copyTag" readonly style="width:100%; flex-grow:1; font-family:monospace; font-size:10px; margin-bottom:15px;">${gpx}</textarea>
-        <button id="finalCopyBtn" style="height:60px; background:var(--hrc-red); color:#fff; font-weight:bold; border:none; border-radius:10px;">COPY & GO TO EXPORT</button>
-        <button onclick="this.parentElement.parentElement.remove()" style="margin-top:10px; background:none; border:none; color:#666;">CANCEL</button>
-    </div>`;
+    ov.id = "copy-overlay";
+    ov.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99999; display:flex; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;";
+    
+    ov.innerHTML = `
+        <div style="background:#222; width:100%; max-width:500px; border:2px solid var(--hrc-red); border-radius:15px; padding:25px; display:flex; flex-direction:column; box-sizing:border-box; color:#fff; text-align:center;">
+            <h2 style="margin:0 0 15px 0; color:var(--hrc-red); font-size:20px;">GPX DATA READY</h2>
+            <p style="font-size:12px; margin-bottom:20px; opacity:0.8;">ボタンをタップしてデータをコピーし、<br>解析ページへ移動します。</p>
+            
+            <textarea id="copyTag" readonly style="width:100%; height:150px; background:#000; color:#0f0; border:1px solid #444; font-family:monospace; font-size:10px; padding:10px; margin-bottom:20px; border-radius:5px; resize:none; -webkit-user-select:all;">${gpx}</textarea>
+            
+            <button id="finalCopyBtn" style="height:70px; background:var(--hrc-red); color:#fff; font-size:18px; font-weight:bold; border:none; border-radius:10px; cursor:pointer; box-shadow: 0 4px 15px rgba(228,0,43,0.4); transition: 0.2s;">
+                COPY & GO TO DATA.HTML
+            </button>
+            
+            <button onclick="document.getElementById('copy-overlay').remove()" style="margin-top:20px; background:none; border:none; color:#aaa; font-size:14px; text-decoration:underline; cursor:pointer;">
+                CANCEL
+            </button>
+        </div>
+    `;
     document.body.appendChild(ov);
-    document.getElementById('finalCopyBtn').onclick = () => {
-        const area = document.getElementById('copyTag'); area.select(); document.execCommand('copy');
-        window.location.href = "https://klap-degi-gps-ip10.vercel.app/export.html";
+
+    // ボタンクリック時の連動処理（コピー ＋ 遷移）
+    document.getElementById('finalCopyBtn').onclick = async function() {
+        const area = document.getElementById('copyTag');
+        
+        try {
+            // 1. クリップボードへコピー（Mobile Safari互換性重視）
+            area.select();
+            area.setSelectionRange(0, 99999); 
+            const success = document.execCommand('copy');
+            
+            if (success) {
+                // 成功時の演出
+                this.textContent = "COPIED!";
+                this.style.background = "#008000"; // 成功のグリーン
+                this.style.boxShadow = "0 4px 15px rgba(0,128,0,0.4)";
+                
+                // 2. 800ms待機してから遷移（確実にコピーさせるための溜め）
+                setTimeout(() => {
+                    window.location.href = "https://klap-degi-gps10.vercel.app/data.html";
+                }, 800);
+            } else {
+                throw new Error("Copy failed");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("コピーに失敗しました。テキストエリアを長押しして手動でコピーしてください。");
+        }
     };
 }
 
