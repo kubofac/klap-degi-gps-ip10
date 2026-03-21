@@ -2,79 +2,175 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GPX Export (Safari)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GPX ANALYZER & EXPORT</title>
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, sans-serif; 
-            background: #121212; color: #fff; 
-            margin: 0; padding: 15px;
-            display: flex; flex-direction: column; height: 100vh;
+        :root {
+            --hrc-red: #E4002B;
+            --hrc-blue: #004098;
+            --bg-dark: #000000;
+            --panel-bg: #1a1a1a;
+            --success-green: #28a745;
         }
-        h2 { color: #ff9900; margin: 10px 0; font-size: 1.5rem; text-align: center; }
-        p { font-size: 0.9rem; color: #aaa; text-align: center; margin-bottom: 15px; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: 'Arial Black', sans-serif; 
+            background: var(--bg-dark); color: #fff; 
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; height: 100dvh;
+        }
+        h2 { color: var(--hrc-red); margin: 10px 0 5px 0; font-size: 1.8rem; text-align: center; font-style: italic; }
+        p { font-size: 0.85rem; color: #888; text-align: center; margin-bottom: 20px; }
         
+        /* インポートアクションエリア */
+        .action-group {
+            display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;
+        }
+
+        .btn-main {
+            width: 100%; height: 75px;
+            color: white; border: none; border-radius: 15px;
+            font-size: 1.3rem; font-weight: 900;
+            cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        #pasteBtn { 
+            background: var(--hrc-red); 
+            box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4);
+        }
+        #pasteBtn:active { transform: scale(0.97); filter: brightness(1.2); }
+        
+        .btn-secondary {
+            background: #333; height: 50px; border-radius: 10px; color: #ccc;
+            border: 1px solid #444; font-size: 0.9rem; font-weight: bold;
+        }
+
         textarea {
             width: 100%; flex-grow: 1;
-            background: #222; color: #0f0;
-            border: 2px solid #444; border-radius: 12px;
-            padding: 12px; font-family: monospace; font-size: 14px;
-            margin-bottom: 20px; outline: none;
+            background: #0a0a0a; color: #0f0;
+            border: 1px solid #333; border-radius: 12px;
+            padding: 15px; font-family: 'Courier New', monospace; font-size: 12px;
+            margin-bottom: 20px; outline: none; resize: none;
         }
-        textarea:focus { border-color: #ff9900; }
+        textarea:focus { border-color: var(--hrc-red); }
 
-        .btn-save {
-            width: 100%; height: 80px;
-            background: #28a745; color: white;
-            border: none; border-radius: 15px;
-            font-size: 1.2rem; font-weight: bold;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
-            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        .status-msg {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--success-green); padding: 10px 20px; border-radius: 20px;
+            font-size: 0.9rem; font-weight: bold; display: none; z-index: 100;
         }
-        .btn-save:active { background: #218838; transform: scale(0.98); }
 
-        .footer-link {
-            display: block; margin-top: 15px;
-            color: #888; text-decoration: none; font-size: 0.8rem; text-align: center;
+        .footer-links {
+            display: flex; justify-content: space-between; padding: 10px 0;
+            margin-bottom: env(safe-area-inset-bottom);
         }
+        .footer-links a { color: #666; text-decoration: none; font-size: 0.8rem; }
     </style>
 </head>
 <body>
 
-    <h2>GPX書き出し</h2>
-    <p>コピーした内容を貼り付けて保存を押してください</p>
+    <div id="toast" class="status-msg">COPIED & READY</div>
 
-    <textarea id="input" placeholder="ここにペースト..."></textarea>
+    <h2>GPX ANALYZER</h2>
+    <p>走行ログをペーストして解析・保存します</p>
 
-    <button class="btn-save" onclick="save()">GPXファイルとして保存</button>
-    
-    <a href="#" class="footer-link" onclick="document.getElementById('input').value=''; return false;">入力をクリア</a>
+    <div class="action-group">
+        <button id="pasteBtn" class="btn-main" onclick="handlePasteAndSave()">
+            📋 PASTE & SAVE GPX
+        </button>
+    </div>
+
+    <textarea id="input" placeholder="ここにGPXデータを貼り付けてください..."></textarea>
+
+    <div class="footer-links">
+        <a href="#" onclick="document.getElementById('input').value=''; return false;">入力クリア</a>
+        <a href="https://klap-degi-gps-ip10.vercel.app/index.html">← 計測画面に戻る</a>
+    </div>
 
     <script>
-        function save() {
-            const txt = document.getElementById('input').value.trim();
-            if(!txt.includes('<gpx')) {
-                alert("有効なGPXデータが見つかりません。");
-                return;
+        // クリップボードからの読み取りと保存の統合処理
+        async function handlePasteAndSave() {
+            const btn = document.getElementById('pasteBtn');
+            const textarea = document.getElementById('input');
+
+            try {
+                // 1. クリップボードの読み取り (Bluefy/Safari対応)
+                let text = "";
+                try {
+                    text = await navigator.clipboard.readText();
+                } catch (e) {
+                    // クリップボードAPIが使えない場合はテキストエリアの内容を確認
+                    text = textarea.value.trim();
+                }
+
+                if (!text || !text.includes('<gpx')) {
+                    if (textarea.value.includes('<gpx')) {
+                        text = textarea.value.trim();
+                    } else {
+                        alert("有効なGPXデータが見つかりません。\n計測画面でGPXコピーを行ってください。");
+                        return;
+                    }
+                }
+
+                // テキストエリアに反映
+                textarea.value = text;
+                
+                // 2. 保存処理の実行
+                saveGPX(text);
+
+            } catch (err) {
+                console.error(err);
+                alert("データの読み取りに失敗しました。手動で貼り付けてください。");
             }
+        }
+
+        function saveGPX(txt) {
             try {
                 const blob = new Blob([txt], { type: 'application/gpx+xml' });
                 const url = URL.createObjectURL(blob);
+                
+                // ファイル名の生成 (Log_YYYYMMDD_HHMM.gpx)
+                const now = new Date();
+                const dateStr = now.getFullYear() + 
+                                String(now.getMonth() + 1).padStart(2, '0') + 
+                                String(now.getDate()).padStart(2, '0') + "_" +
+                                String(now.getHours()).padStart(2, '0') + 
+                                String(now.getMinutes()).padStart(2, '0');
+                
+                const fileName = `Log_${dateStr}.gpx`;
+
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Log_${Date.now()}.gpx`;
+                a.download = fileName;
                 document.body.appendChild(a);
                 a.click();
+                
+                // 視覚的フィードバック
+                const toast = document.getElementById('toast');
+                toast.textContent = "SAVED: " + fileName;
+                toast.style.display = "block";
+                
+                const btn = document.getElementById('pasteBtn');
+                btn.style.background = "var(--success-green)";
+                btn.textContent = "✅ SUCCESS";
+
                 setTimeout(() => {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                }, 100);
-                alert("保存を開始しました。Safariのダウンロードを確認してください。");
+                    toast.style.display = "none";
+                    btn.style.background = "var(--hrc-red)";
+                    btn.textContent = "📋 PASTE & SAVE GPX";
+                }, 3000);
+
             } catch (e) {
-                alert("エラー: " + e.message);
+                alert("保存エラー: " + e.message);
             }
         }
+
+        // ページ読み込み時にテキストエリアにフォーカス（手動ペースト準備）
+        window.onload = () => {
+            document.getElementById('input').focus();
+        };
     </script>
 </body>
 </html>
