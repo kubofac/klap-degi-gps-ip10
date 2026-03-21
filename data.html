@@ -5,75 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>GPX ANALYZER</title>
     <style>
-        :root { --hrc-red: #E4002B; --bg-dark: #000000; --success-green: #28a745; }
+        :root { --hrc-red: #E4002B; --bg-dark: #000; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Arial Black', sans-serif; background: var(--bg-dark); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100dvh; }
-        h2 { color: var(--hrc-red); margin: 10px 0; text-align: center; font-style: italic; }
-        .btn-main { width: 100%; height: 80px; background: var(--hrc-red); color: white; border: none; border-radius: 20px; font-size: 1.4rem; font-weight: 900; box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4); margin-bottom: 20px; }
-        textarea { width: 100%; flex-grow: 1; background: #111; color: #0f0; border: 1px solid #333; border-radius: 12px; padding: 15px; font-family: monospace; font-size: 12px; margin-bottom: 20px; outline: none; }
+        h2 { color: var(--hrc-red); text-align: center; font-style: italic; margin-bottom: 5px; }
+        p { font-size: 11px; color: #888; text-align: center; margin-bottom: 20px; }
+        
+        .btn-main { 
+            width: 100%; height: 80px; background: var(--hrc-red); color: white; border: none; 
+            border-radius: 20px; font-size: 1.4rem; font-weight: 900; 
+            box-shadow: 0 4px 20px rgba(228, 0, 43, 0.4); margin-bottom: 20px; 
+        }
+        
+        /* 常に表示させておくことで、iOSのフォーカス制限を回避しやすくする */
+        textarea { 
+            width: 100%; flex-grow: 1; background: #111; color: #0f0; 
+            border: 1px solid #333; border-radius: 12px; padding: 15px; 
+            font-family: monospace; font-size: 13px; outline: none;
+        }
     </style>
 </head>
 <body>
 
     <h2>GPX ANALYZER</h2>
-    <p style="text-align:center; font-size:12px; color:#888;">iPhone 8 / Bluefy 最適化版</p>
+    <p>TAP THE BUTTON, THEN TAP 'ALLOW' OR PASTE</p>
 
-    <button id="pasteBtn" class="btn-main" onclick="superPaste()">
-        📋 TAP TO IMPORT
-    </button>
+    <button id="pasteBtn" class="btn-main">📋 IMPORT GPX</button>
 
     <textarea id="input" placeholder="ここにGPXを貼り付け..."></textarea>
 
     <script>
-        async function superPaste() {
-            const area = document.getElementById('input');
-            const btn = document.getElementById('pasteBtn');
+        const btn = document.getElementById('pasteBtn');
+        const area = document.getElementById('input');
+
+        btn.addEventListener('click', async () => {
+            // 1. まずフォーカスを当てる（iOSでの入力を有効化）
+            area.focus();
 
             try {
-                // 手順1: Clipboard APIを試みる
+                // 2. Clipboard API を試みる
+                // iPhone 8 (iOS 14+) なら、ここで「貼り付けを許可しますか？」のポップアップが出るはずです
                 const text = await navigator.clipboard.readText();
+                
                 if (text && text.includes('<gpx')) {
                     area.value = text;
                     executeSave(text);
-                    return;
+                } else {
+                    // クリップボードが空、またはGPXでない場合、
+                    // エリアにすでに文字があればそれを採用
+                    if (area.value.includes('<gpx')) {
+                        executeSave(area.value);
+                    } else {
+                        alert("クリップボードにGPXがありません。\nロガー側で再度コピーしてください。");
+                    }
                 }
-            } catch (e) {
-                console.log("Clipboard API blocked, using manual focus.");
+            } catch (err) {
+                // 3. APIがブロックされた場合の最終手段
+                console.log("Clipboard API blocked");
+                // すでにペースト済みの内容があれば実行
+                if (area.value.includes('<gpx')) {
+                    executeSave(area.value);
+                } else {
+                    // ユーザーに手動操作を促す（これがiOSでの限界ラインです）
+                    alert("ブラウザ制限により自動取得できません。\n入力エリアを長押しして『ペースト』したあと、もう一度ボタンを押してください。");
+                }
             }
-
-            // 手順2: Clipboard APIがダメな場合 (iPhone 8 / Safari制限)
-            // テキストエリアに一旦フォーカスさせ、ユーザーにペーストを促すか、
-            // すでにエリアに文字があればそれを採用する
-            if (area.value.includes('<gpx')) {
-                executeSave(area.value);
-            } else {
-                area.focus();
-                alert("ブラウザの制限で自動ペーストができませんでした。\n入力エリアを長押しして『ペースト』してから、もう一度ボタンを押してください。");
-            }
-        }
+        });
 
         function executeSave(txt) {
             const blob = new Blob([txt.trim()], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const now = new Date();
-            const timeStr = now.getHours() + "" + now.getMinutes();
-            
+            const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+            const timeStr = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+
             a.href = url;
-            a.download = `Log_${timeStr}.gpx`;
+            a.download = `Log_${dateStr}_${timeStr}.gpx`;
             document.body.appendChild(a);
             a.click();
             
-            const btn = document.getElementById('pasteBtn');
             btn.style.background = "#28a745";
             btn.textContent = "✅ SAVED!";
             
             setTimeout(() => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                btn.style.background = "#E4002B";
-                btn.textContent = "📋 TAP TO IMPORT";
-            }, 2000);
+                btn.style.background = "var(--hrc-red)";
+                btn.textContent = "📋 IMPORT GPX";
+            }, 3000);
         }
     </script>
 </body>
