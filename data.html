@@ -3,77 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>GPX ONE-TAP SAVE</title>
+    <title>PERMISSION ACTIVATOR</title>
     <style>
-        :root { --hrc-red: #E4002B; --bg-dark: #000; }
-        body { font-family: sans-serif; background: var(--bg-dark); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
-        .btn-main { width: 90%; height: 100px; background: var(--hrc-red); color: white; border: none; border-radius: 20px; font-size: 1.5rem; font-weight: 900; box-shadow: 0 5px 25px rgba(224, 0, 43, 0.5); }
-        #status { margin-top: 20px; font-size: 14px; color: #888; }
-        textarea { width: 1px; height: 1px; opacity: 0; position: absolute; } /* 隠し要素 */
+        :root { --hrc-red: #E4002B; }
+        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; padding: 40px 20px; }
+        .btn-trigger { 
+            width: 100%; height: 100px; background: var(--hrc-red); color: white; 
+            border: none; border-radius: 20px; font-size: 1.2rem; font-weight: bold;
+            box-shadow: 0 0 20px rgba(228, 0, 43, 0.6);
+        }
+        .guide { margin-top: 30px; text-align: left; font-size: 13px; color: #aaa; line-height: 1.6; }
     </style>
 </head>
 <body>
 
-    <button id="mainBtn" class="btn-main">TAP TO<br>IMPORT & SAVE</button>
-    <div id="status">READY</div>
-    
-    <textarea id="hiddenInput"></textarea>
+    <button id="triggerBtn" class="btn-trigger">
+        1. ACTIVATE CLIPBOARD<br>PERMISSION
+    </button>
+
+    <div class="guide">
+        <p><strong>【手順】</strong></p>
+        <ol>
+            <li>上の赤いボタンをタップします。</li>
+            <li><strong>「"Safari"に貼り付けを許可しますか？」</strong>が出たら、必ず<strong>「許可」</strong>を押してください。</li>
+            <li>保存が自動で始まります。</li>
+            <li>一度成功すれば、iPhoneの<strong>「設定 > Safari > 他のAppからペースト」</strong>の設定が変更可能になります。</li>
+        </ol>
+    </div>
 
     <script>
-        document.getElementById('mainBtn').addEventListener('click', async function() {
-            const status = document.getElementById('status');
-            const btn = this;
-
+        document.getElementById('triggerBtn').onclick = async function() {
             try {
-                // 【重要】iOS Safariで「許可」ポップアップを出すための直接命令
+                // OSにクリップボード読み取りを要求
                 const text = await navigator.clipboard.readText();
                 
                 if (text && text.includes('<gpx')) {
-                    status.textContent = "GPX DETECTED. SAVING...";
+                    this.style.background = "#28a745";
+                    this.textContent = "✅ SUCCESS! SAVING...";
                     saveFile(text);
                 } else {
-                    // クリップボードが空、またはGPXでない場合
-                    alert("クリップボードにGPXデータが見つかりません。\nロガー側で再度コピーしてください。");
+                    alert("クリップボードが空です。ロガーでコピーしてから戻ってきてください。");
                 }
             } catch (err) {
-                // 権限エラーの場合：手動操作への誘導
-                console.error(err);
-                status.textContent = "ACCESS DENIED";
-                
-                // 【iPhone 8 特有の回避策】
-                // 1. 隠しテキストエリアにフォーカスを当てる
-                const hidden = document.getElementById('hiddenInput');
-                hidden.focus();
-                
-                // 2. ユーザーに「一度だけ」手動操作を促す
-                alert("【iPhone 8 設定】\n1. 上に出る『貼り付けを許可』を押してください。\n\n出ない場合は、下の『READY』付近を長押ししてペーストし、もう一度ボタンを押してください。");
+                // 拒否されている場合にアラートを表示して、OSの設定へ誘導
+                alert("アクセスが拒否されました。\n\n1. 上に出るポップアップで『許可』を押す\n2. または、iPhoneの『設定 > Safari』を確認してください。");
             }
-        });
+        };
 
         function saveFile(txt) {
-            const blob = new Blob([txt.trim()], { type: 'application/gpx+xml' });
+            const blob = new Blob([txt], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            const now = new Date();
-            const timeStr = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
-
             a.href = url;
-            a.download = `Log_${timeStr}.gpx`;
+            a.download = `Log_${Date.now()}.gpx`;
             document.body.appendChild(a);
-            
-            // Safariでダウンロードを確実に実行させる
             a.click();
-            
-            document.getElementById('mainBtn').style.background = "#28a745";
-            document.getElementById('mainBtn').textContent = "✅ SUCCESS";
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                document.getElementById('mainBtn').style.background = "var(--hrc-red)";
-                document.getElementById('mainBtn').textContent = "TAP TO IMPORT & SAVE";
-                document.getElementById('status').textContent = "SAVED TO DOWNLOADS";
-            }, 3000);
+            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
         }
     </script>
 </body>
