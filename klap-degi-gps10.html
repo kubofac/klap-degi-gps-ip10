@@ -317,10 +317,10 @@ function mainLoop() {
         document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
         
         // 【仕様】フリーズ中は確定タイム、それ以外はリアルタイムを表示
-        if (isFrozen && now < freezeUntil) {
-            document.getElementById('display1').textContent = freezeDisplayTime;
-            document.getElementById('display1').style.color = "var(--hrc-red)"; // フリーズ中を視覚化
-        } else {
+      if (isFrozen && now < freezeUntil) {
+    document.getElementById('display1').textContent = freezeDisplayTime;
+    document.getElementById('display1').style.color = "var(--hrc-white)"; // 白に変更
+}else {
             isFrozen = false;
             document.getElementById('display1').textContent = timeFormat(now - (lapStartTime || startTime));
             document.getElementById('display1').style.color = "var(--hrc-white)";
