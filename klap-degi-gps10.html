@@ -222,9 +222,23 @@ function getIntersection(p1, p2, line) {
 
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
 
+// ラップリスト表示の更新関数（安全策を追加）
 function updateLapList() {
+    const lapContainer = document.getElementById('lap');
+    if (!lapContainer) return;
+
+    if (lapRecords.length === 0) {
+        lapContainer.innerHTML = "";
+        return;
+    }
+
     const best = Math.min(...lapRecords.map(r => r.time));
-    document.getElementById('lap').innerHTML = lapRecords.map(r => `<div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}"><span>L${r.no}</span><span>${timeFormat(r.time)}</span></div>`).join('');
+    lapContainer.innerHTML = lapRecords.map(r => `
+        <div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}">
+            <span>L${r.no}</span>
+            <span>${timeFormat(r.time)}</span>
+        </div>
+    `).join('');
 }
 
 function mainLoop() {
@@ -262,12 +276,30 @@ function mainLoop() {
 // --- 6. イベント登録 ---
 document.getElementById('intGpsBtn').onclick = toggleInternalGps;
 document.getElementById('btConnect').onclick = ble;
+
 document.getElementById('startBtn').onclick = function() {
     if (swState !== 1) {
-        swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; lastPos = null; validDirection = null;
-        this.classList.add('active'); document.getElementById('gpxBtn').style.display = 'none';
+        // --- START (計測開始) ---
+        swState = 1; 
+        startTime = Date.now(); 
+        lapStartTime = 0; 
+        lapRecords = []; // 履歴をリセット
+        gpsPoints = [];  // 走行ログをリセット
+        lastPos = null; 
+        validDirection = null;
+        updateLapList(); // 画面上のリストを空にする
+        
+        this.classList.add('active'); 
+        document.getElementById('gpxBtn').style.display = 'none';
     } else {
-        swState = 2; this.classList.remove('active'); document.getElementById('gpxBtn').style.display = 'block';
+        // --- STOP (計測停止) ---
+        swState = 2; 
+        this.classList.remove('active'); 
+        
+        // ログがある場合のみGPXボタンを表示
+        if (gpsPoints && gpsPoints.length > 0) {
+            document.getElementById('gpxBtn').style.display = 'block';
+        }
     }
 };
 document.getElementById('lapBtn').onclick = () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); };
