@@ -175,15 +175,37 @@ function processLap(hitTime, useFreeze) {
     lapStartTime = hitTime; maxSpeedInLap = 0; maxRpmInLap = 0; s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
 }
 
+
 // --- 4. 通信部 (BLE/GPS) ---
+let bleDevice = null; // デバイス保持用
+
 async function ble() {
     try {
-        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        // 初回のみユーザーがデバイスを選択
+        bleDevice = await navigator.bluetooth.requestDevice({ 
+            filters: [{ services: [SERVICE_UUID] }] 
+        });
+        
+        // 【追加】切断イベントリスナーを登録
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        
+        // 接続処理へ
+        await connectToBle(bleDevice);
+        
+    } catch (e) { 
+        console.log("BLE Error: " + e.message); 
+    }
+}
+
+// 【追加】接続・サービス取得をひとまとめにした関数
+async function connectToBle(device) {
+    const btn = document.getElementById('btConnect');
+    try {
+        btn.textContent = "CONNECTING...";
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         
-        const btn = document.getElementById('btConnect');
         btn.classList.add('active');
         btn.textContent = "BLE FIXED";
 
@@ -202,24 +224,25 @@ async function ble() {
             }
         });
         await char.startNotifications();
-    } catch (e) { alert("BLE Error: " + e.message); }
+        console.log("BLE Connected & Notifications Started");
+    } catch (e) {
+        console.log("Connection failed, retrying in 3s...");
+        btn.textContent = "RETRYING...";
+        // 失敗しても3秒後に自動リトライ
+        setTimeout(() => connectToBle(device), 3000);
+    }
 }
 
-async function toggleInternalGps() {
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; document.getElementById('intGpsBtn').classList.remove('active'); return; }
-    const btn = document.getElementById('intGpsBtn');
-    btn.classList.add('active'); 
+// 【追加】切断時に呼ばれるハンドラ
+function onDisconnected(event) {
+    const device = event.target;
+    const btn = document.getElementById('btConnect');
+    btn.classList.remove('active');
+    btn.textContent = "RECONNECTING...";
+    console.log("BLE Disconnected. Auto-reconnecting...");
     
-    watchId = navigator.geolocation.watchPosition(pos => {
-        const now = Date.now();
-        if (pos.coords.accuracy < 10) { btn.style.background = "var(--hrc-red)"; btn.textContent = "GPS FIXED"; }
-        else { btn.style.background = "var(--hrc-orange)"; btn.textContent = "GPS SEARCH"; }
-        currentSpeedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
-        lat = pos.coords.latitude; lon = pos.coords.longitude;
-        document.getElementById('debug_lat').textContent = lat.toFixed(6);
-        document.getElementById('debug_lon').textContent = lon.toFixed(6);
-        handlePositionUpdate(lat, lon, now);
-    }, e => alert(e.message), { enableHighAccuracy: true, maximumAge: 0 });
+    // ESP32が再起動してアドバタイズを始めるのを待って再接続
+    setTimeout(() => connectToBle(device), 3000);
 }
 
 // --- 5. データ出力 (GPX) ---
