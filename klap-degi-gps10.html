@@ -188,7 +188,7 @@ function onDisconnected(event) {
     const btn = document.getElementById('btConnect');
     btn.classList.remove('active');
     btn.textContent = "RECONNECTING...";
-    setTimeout(() => connectToBle(device), 3000);
+    setTimeout(() => connectToBle(device), 1000);
 }
 
 // --- 4. GPS切替 (暫定定義) ---
