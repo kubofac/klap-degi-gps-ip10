@@ -276,7 +276,28 @@ function mainLoop() {
 // --- 6. イベント登録 ---
 document.getElementById('intGpsBtn').onclick = toggleInternalGps;
 document.getElementById('btConnect').onclick = ble;
+// ★これを追加：HISTORYボタンを押した時にページを表示し、中身を更新する
+document.getElementById('historyBtn').onclick = () => {
+    updateHistoryTable(); // 履歴テーブルの中身を作成
+    document.getElementById('history-page').style.display = 'block';
+};
 
+// ★これも追加：履歴テーブルの中身を生成する関数
+function updateHistoryTable() {
+    const body = document.getElementById('history-body');
+    body.innerHTML = lapRecords.map(r => `
+        <tr>
+            <td>${r.no}</td>
+            <td>${r.s1}</td>
+            <td>${r.s2}</td>
+            <td>${r.s3}</td>
+            <td>${r.s4}</td>
+            <td style="font-weight:bold;">${timeFormat(r.time)}</td>
+            <td>${r.max}</td>
+            <td>${r.maxRpm}</td>
+        </tr>
+    `).join('');
+}
 document.getElementById('startBtn').onclick = function() {
     if (swState !== 1) {
         // --- START (計測開始) ---
