@@ -168,12 +168,22 @@ function processLap(hitTime, useFreeze) {
 
 // --- 4. 通信部 (ウォッチドッグ・自動再接続強化版) ---
 async function ble() {
+    console.log("BLE start requested");
     try {
-        bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+        if (!navigator.bluetooth) {
+            alert("このブラウザはBLEに対応していないか、HTTPS接続ではありません。");
+            return;
+        }
+        bleDevice = await navigator.bluetooth.requestDevice({ 
+            filters: [{ services: [SERVICE_UUID] }] 
+        });
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
         await connectToBle(bleDevice);
         if (!watchdogTimer) startWatchdog();
-    } catch (e) { console.log("BLE Error: " + e.message); }
+    } catch (e) { 
+        console.log("BLE Error: " + e.message);
+        alert("BLE接続エラー: " + e.message); // キャンセル時などもここに出ます
+    }
 }
 
 async function connectToBle(device) {
@@ -220,15 +230,42 @@ function startWatchdog() {
 
 async function toggleInternalGps() {
     const btn = document.getElementById('intGpsBtn');
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; btn.classList.remove('active'); return; }
+    if (watchId !== null) { 
+        navigator.geolocation.clearWatch(watchId); 
+        watchId = null; 
+        btn.classList.remove('active'); 
+        btn.textContent = "INT GPS";
+        return; 
+    }
+    
     btn.classList.add('active'); 
+    btn.textContent = "SEARCHING...";
+
+    if (!navigator.geolocation) {
+        alert("この端末はGPSに対応していません。");
+        return;
+    }
+
     watchId = navigator.geolocation.watchPosition(pos => {
         const now = Date.now();
-        if (pos.coords.accuracy < 10) { btn.style.background = "var(--hrc-red)"; btn.textContent = "GPS FIXED"; }
-        else { btn.style.background = "var(--hrc-orange)"; btn.textContent = "GPS SEARCH"; }
+        console.log("GPS Fix:", pos.coords.latitude, pos.coords.longitude);
+        if (pos.coords.accuracy < 10) { 
+            btn.style.background = "var(--hrc-red)"; 
+            btn.textContent = "GPS FIXED"; 
+        } else { 
+            btn.style.background = "var(--hrc-orange)"; 
+            btn.textContent = "GPS LOW ACC"; 
+        }
         currentSpeedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
         handlePositionUpdate(pos.coords.latitude, pos.coords.longitude, now);
-    }, e => console.log(e.message), { enableHighAccuracy: true, maximumAge: 0 });
+        
+        // 画面上のデバッグ表示を強制更新
+        document.getElementById('debug_lat').textContent = pos.coords.latitude.toFixed(6);
+        document.getElementById('debug_lon').textContent = pos.coords.longitude.toFixed(6);
+    }, e => {
+        console.log("GPS Error:", e.message);
+        alert("GPSエラー (" + e.code + "): " + e.message + "\n位置情報の許可を確認してください。");
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
 }
 
 // --- 5. データ出力 (コピー用オーバーレイ方式統合) ---
