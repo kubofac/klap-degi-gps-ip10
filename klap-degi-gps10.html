@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KLAP DEGI V5.1 - PROFESSIONAL</title>
 <style>
+    /* CSSは既存デザインを継承 */
     :root { --hrc-red: #E4002B; --hrc-blue: #004098; --hrc-white: #ffffff; --bg-dark: #000000; --hrc-orange: #FFA500; }
     body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: var(--hrc-white); font-family: 'Arial Black', sans-serif; overflow: hidden; position: fixed; }
     #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
@@ -13,6 +14,7 @@
     .main-ui-container { position: absolute; right: 10px; top: 65px; bottom: 65px; display: flex; flex-direction: row; align-items: flex-start; gap: 20px; z-index: 20; pointer-events: none; }
     #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; margin-top: 50px;}
     #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; }
+    #display1 { font-size: 15vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; white-space: nowrap; }
     #display1 { font-size: 15vh; font-weight: 900; line-height: 0.9; text-shadow: 4px 4px 15px #000; white-space: nowrap; transition: color 0.2s; }
     #sector-container { display: flex; justify-content: flex-end; gap: 10px; font-size: 4vh; font-weight: 900; height: 4.5vh; margin-top: 5px; }
     .sec-box { display: none; text-shadow: 2px 2px 8px #000; color: #fff; }
@@ -87,12 +89,14 @@ const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const PULSE_UUID = "f4deb353-a4cf-4ffb-badb-2a5f2e3bb630";
 let swState = 0, startTime = 0, lapStartTime = 0, lapRecords = [], gpsPoints = [];
 let lat = 0, lon = 0, currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxSpeedInLap = 0, maxRpmInLap = 0;
+let lastPos = null, isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let lastPos = null;
 
+// --- 【仕様追加】表示フリーズ・クリア関連変数 ---
 let isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let sectorClearTimer = null;
-const FREEZE_MS = 15000;
-const SECTOR_CLEAR_MS = 3000;
+const FREEZE_MS = 15000;         // 15秒間フリーズ
+const SECTOR_CLEAR_MS = 3000;    // 3秒後にセクター表示をクリア
 
 let lines = { startLine: null, s1Line: null, s2Line: null, s3Line: null };
 let validDirection = null, sectorDirections = { s1: null, s2: null, s3: null };
@@ -101,7 +105,7 @@ let pulsePerRev = 1, cooldownMs = 15000;
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
-// --- 2. 位置情報処理 ---
+// --- 2. 位置情報処理 (GPS Logic) ---
 function handlePositionUpdate(currLat, currLon, now) {
     if (currLat === 0 && currLon === 0) return;
     document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
@@ -120,6 +124,7 @@ function handlePositionUpdate(currLat, currLon, now) {
                 if (validDirection === null) validDirection = hitSL.dir;
                 if (hitSL.dir === validDirection && (hitSL.time - (lapStartTime || startTime) > cooldownMs)) {
                     processLap(hitSL.time, true);
+                    processLap(hitSL.time, true); // 【仕様】ライン通過時はフリーズ有効
                 }
             }
             ['s1', 's2', 's3'].forEach(s => {
@@ -139,76 +144,127 @@ function handlePositionUpdate(currLat, currLon, now) {
     }
 }
 
+// --- 3. 計測コア (Lap/Sector) ---
 function processLap(hitTime, useFreeze) {
     const lapTimeMs = hitTime - (lapStartTime || startTime);
+    // S4算出: 直近のセクター通過時刻からの残り
     const s4 = lastPassedSectorTime > 0 ? ((lapTimeMs/1000) - lastPassedSectorTime).toFixed(3) : "--.---";
-    const lapData = { no: lapRecords.length + 1, time: lapTimeMs, max: Math.round(maxSpeedInLap), maxRpm: Math.round(maxRpmInLap), s1: document.getElementById('s1_val').textContent, s2: document.getElementById('s2_val').textContent, s3: document.getElementById('s3_val').textContent, s4: s4 };
+
+    const lapData = { 
+        no: lapRecords.length + 1, 
+        time: lapTimeMs, 
+        max: Math.round(maxSpeedInLap), 
+        maxRpm: Math.round(maxRpmInLap),
+        s1: document.getElementById('s1_val').textContent, 
+        s2: document.getElementById('s2_val').textContent, 
+        s3: document.getElementById('s3_val').textContent, 
+        s4: s4 
+    };
+
     lapRecords.unshift(lapData);
     updateLapList();
-    if (useFreeze) { isFrozen = true; freezeDisplayTime = timeFormat(lapTimeMs); freezeUntil = Date.now() + FREEZE_MS; if (sectorClearTimer) clearTimeout(sectorClearTimer); sectorClearTimer = setTimeout(() => { ['s1_val', 's2_val', 's3_val'].forEach(id => document.getElementById(id).textContent = "--.---"); }, SECTOR_CLEAR_MS); }
+
+    if (useFreeze) { 
+        isFrozen = true; 
+        freezeDisplayTime = timeFormat(lapTimeMs); 
+        freezeUntil = Date.now() + 15000; // 仕様: 15秒間フリーズ
+        // 【仕様】3秒後にセクター表示をクリア
+        setTimeout(() => {
+        freezeUntil = Date.now() + FREEZE_MS; // 15秒間フリーズ
+
+        // 【仕様】通過3秒後にセクター表示をクリア
+        if (sectorClearTimer) clearTimeout(sectorClearTimer);
+        sectorClearTimer = setTimeout(() => {
+            ['s1_val', 's2_val', 's3_val'].forEach(id => document.getElementById(id).textContent = "--.---");
+        }, 3000);
+        }, SECTOR_CLEAR_MS);
+    }
+
     lapStartTime = hitTime; maxSpeedInLap = 0; maxRpmInLap = 0; s1_abs = 0; s2_abs = 0; s3_abs = 0; lastPassedSectorTime = 0;
 }
 
-// --- 3. 通信部 (BLE) ---
-let bleDevice = null;
+// --- 4. 通信部 (BLE/GPS) ---
 async function ble() {
     try {
-        bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-        await connectToBle(bleDevice);
-    } catch (e) { console.log("BLE Error: " + e.message); }
-}
-
-async function connectToBle(device) {
-    const btn = document.getElementById('btConnect');
-    try {
-        btn.textContent = "CONNECTING...";
+        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
+
+        // 【仕様】接続完了で「赤」に変化
+        const btn = document.getElementById('btConnect');
         btn.classList.add('active');
         btn.textContent = "BLE FIXED";
+
         char.addEventListener('characteristicvaluechanged', (e) => {
             const d = e.target.value; const now = Date.now();
+            // 元のV4.6パースロジックを維持
             if (d.byteLength >= 13) {
-                lat = d.getInt32(0, true) / 1000000; lon = d.getInt32(4, true) / 1000000; currentSpeedKmh = d.getUint16(8, true); currentTemp = d.getUint8(10); currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
-                document.getElementById('debug_lat').textContent = lat.toFixed(6); document.getElementById('debug_lon').textContent = lon.toFixed(6); document.getElementById('temp_val').textContent = currentTemp;
+                lat = d.getInt32(0, true) / 1000000;
+                lon = d.getInt32(4, true) / 1000000;
+                currentSpeedKmh = d.getUint16(8, true);
+                currentTemp = d.getUint8(10);
+                currentRPM = (d.getUint16(11, true) * 60) / pulsePerRev;
+                document.getElementById('debug_lat').textContent = lat.toFixed(6);
+                document.getElementById('debug_lon').textContent = lon.toFixed(6);
+                document.getElementById('temp_val').textContent = currentTemp;
                 handlePositionUpdate(lat, lon, now);
             }
         });
         await char.startNotifications();
-    } catch (e) {
-        btn.textContent = "RETRYING...";
-        setTimeout(() => connectToBle(device), 3000);
-    }
+    } catch (e) { alert("BLE Error: " + e.message); }
 }
 
-function onDisconnected(event) {
-    const device = event.target;
-    const btn = document.getElementById('btConnect');
-    btn.classList.remove('active');
-    btn.textContent = "RECONNECTING...";
-    setTimeout(() => connectToBle(device), 3000);
-    setTimeout(() => connectToBle(device), 1000);
-}
-
-// --- 4. GPS切替 (暫定定義) ---
-function toggleInternalGps() {
+async function toggleInternalGps() {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; document.getElementById('intGpsBtn').classList.remove('active'); return; }
+    
     const btn = document.getElementById('intGpsBtn');
-    if (!watchId) {
-        watchId = navigator.geolocation.watchPosition(p => {
-            currentSpeedKmh = (p.coords.speed || 0) * 3.6;
-            handlePositionUpdate(p.coords.latitude, p.coords.longitude, Date.now());
-        }, null, { enableHighAccuracy: true });
-        btn.classList.add('active');
-    } else {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-        btn.classList.remove('active');
-    }
+    btn.classList.add('active'); // 最初はActive(オレンジ等)
+    btn.classList.add('active'); 
+
+    watchId = navigator.geolocation.watchPosition(pos => {
+        const now = Date.now();
+        // 【仕様】GPSステータス 2段階変化 (精度10m以内で赤)
+        if (pos.coords.accuracy < 10) { btn.style.background = "var(--hrc-red)"; btn.textContent = "GPS FIXED"; }
+        else { btn.style.background = "var(--hrc-orange)"; btn.textContent = "GPS SEARCH"; }
+
+        currentSpeedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
+        lat = pos.coords.latitude; lon = pos.coords.longitude;
+        document.getElementById('debug_lat').textContent = lat.toFixed(6);
+        document.getElementById('debug_lon').textContent = lon.toFixed(6);
+        handlePositionUpdate(lat, lon, now);
+    }, e => alert(e.message), { enableHighAccuracy: true, maximumAge: 0 });
 }
 
-// --- 5. ユーティリティ ---
+// --- 5. データ出力 (GPX) ---
+document.getElementById('gpxBtn').onclick = () => {
+    if (gpsPoints.length === 0) return;
+    const getL = (k) => {
+        const p1 = localStorage.getItem(k + 'P1Lat');
+        return p1 ? `${p1},${localStorage.getItem(k + 'P1Lon')},${localStorage.getItem(k + 'P2Lat')},${localStorage.getItem(k + 'P2Lon')}` : "SKIP";
+    };
+    const lineMeta = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
+
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+  <metadata><desc>LINE_DATA[${lineMeta}]</desc></metadata>
+  <trk><name>Log_${Date.now()}</name><trkseg>`;
+
+    const base = gpsPoints[0].time;
+    gpsPoints.forEach(p => {
+        const relTime = new Date(946684800000 + (p.time - base)).toISOString();
+        gpx += `
+    <trkpt lat="${p.lat}" lon="${p.lon}">
+      <time>${relTime}</time>
+      <speed>${(p.speed / 3.6).toFixed(2)}</speed>
+      <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${Math.round(p.rpm || 0)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>
+    </trkpt>`;
+    });
+    gpx += `\n  </trkseg></trk>\n</gpx>`;
+    showCopyOverlay(gpx);
+};
+
+// --- 6. 共通・ユーティリティ ---
 function getIntersection(p1, p2, line) {
     if (!line) return null;
     const x1 = p1.lon, y1 = p1.lat, x2 = p2.lon, y2 = p2.lat;
@@ -217,42 +273,102 @@ function getIntersection(p1, p2, line) {
     if (Math.abs(den) < 1e-12) return null;
     const t = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den;
     const u = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den;
-    if (t >= 0 && t <= 1 && u >= -0.2 && u <= 1.2) { return { time: p1.time + (p2.time - p1.time) * t, dir: ((x4 - x3) * (y2 - y1) - (y4 - y3) * (x2 - x1)) > 0 ? 1 : -1 }; }
+    if (t >= 0 && t <= 1 && u >= -0.2 && u <= 1.2) {
+        return { time: p1.time + (p2.time - p1.time) * t, dir: ((x4 - x3) * (y2 - y1) - (y4 - y3) * (x2 - x1)) > 0 ? 1 : -1 };
+    }
     return null;
 }
 
+// 【仕様】小数点3桁表示を徹底
 function timeFormat(ms){ if(ms<0) ms=0; const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000), ms2=Math.floor(ms%1000); return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms2.toString().padStart(3,'0')}`; }
 
-// ラップリスト表示の更新関数（安全策を追加）
-function updateLapList() {
-    const lapContainer = document.getElementById('lap');
-    if (!lapContainer) return;
-
-    if (lapRecords.length === 0) {
-        lapContainer.innerHTML = "";
-        return;
-    }
-
-    const best = Math.min(...lapRecords.map(r => r.time));
-    lapContainer.innerHTML = lapRecords.map(r => `
-        <div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}">
-            <span>L${r.no}</span>
-            <span>${timeFormat(r.time)}</span>
+function showCopyOverlay(gpx) {
+    const ov = document.createElement('div');
+    ov.id = "copy-overlay";
+    ov.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.98); z-index:99999; display:flex; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;";
+    
+    ov.innerHTML = `
+        <div style="background:#1a1a1a; width:100%; max-width:500px; border:2px solid var(--hrc-red); border-radius:15px; padding:25px; display:flex; flex-direction:column; box-sizing:border-box; color:#fff; text-align:center;">
+            <h2 style="margin:0 0 10px 0; color:var(--hrc-red); font-size:22px;">GPX COPIED!</h2>
+            <p style="font-size:13px; margin-bottom:20px; color:#ccc;">
+                クリップボードに保存しました。<br>
+                <b>Bluefyのタブを切り替えて</b><br>
+                data.htmlを開いてください。
+            </p>
+            <textarea id="copyTag" readonly style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; font-family:monospace; font-size:11px; padding:10px; margin-bottom:20px; border-radius:5px; resize:none;">${gpx}</textarea>
+            <button id="finalCopyBtn" style="height:70px; background:var(--hrc-red); color:#fff; font-size:20px; font-weight:bold; border:none; border-radius:12px;">TAP TO RE-COPY</button>
+            <button id="closeOverlayBtn" style="margin-top:20px; background:none; border:none; color:#888; font-size:16px; text-decoration:underline; padding:10px;">CLOSE (RETURN TO TIMER)</button>
         </div>
-    `).join('');
+    `;
+    document.body.appendChild(ov);
+
+    // コピー処理
+    const executeCopy = () => {
+        const area = document.getElementById('copyTag');
+        area.select();
+        area.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        document.getElementById('finalCopyBtn').textContent = "COPIED OK!";
+        document.getElementById('finalCopyBtn').style.background = "#008000";
+        const area = document.getElementById('copyTag'); area.select(); document.execCommand('copy');
+        document.getElementById('finalCopyBtn').textContent = "COPIED OK!"; document.getElementById('finalCopyBtn').style.background = "#008000";
+    };
+
+    executeCopy();
+    document.getElementById('finalCopyBtn').onclick = executeCopy;
+
+    // 【重要修正】CLOSEボタンで完全に元の画面に戻す
+    document.getElementById('closeOverlayBtn').onclick = () => {
+        ov.remove(); 
+        // もしdashboardが非表示になっていたら強制表示
+        document.getElementById('dashboard').style.display = 'flex';
+        // 再描画を促す
+        requestAnimationFrame(mainLoop);
+    };
+    document.getElementById('closeOverlayBtn').onclick = () => { ov.remove(); document.getElementById('dashboard').style.display = 'flex'; };
 }
 
+function updateLapList() {
+    const best = Math.min(...lapRecords.map(r => r.time));
+    document.getElementById('lap').innerHTML = lapRecords.map(r => `<div class="lap-row ${r.time === best && lapRecords.length > 1 ? 'best-lap' : ''}"><span>L${r.no}</span><span>${timeFormat(r.time)}</span></div>`).join('');
+}
+
+// 履歴表示 (仕様: 各ベスト値をハイライト)
+document.getElementById('historyBtn').onclick = () => {
+    if (lapRecords.length === 0) return;
+    const getB = (k) => { const vs = lapRecords.map(r => parseFloat(r[k])).filter(v => !isNaN(v)); return vs.length > 0 ? Math.min(...vs) : null; };
+    const bT = Math.min(...lapRecords.map(r => r.time)), b1 = getB('s1'), b2 = getB('s2'), b3 = getB('s3'), b4 = getB('s4');
+    document.getElementById('history-body').innerHTML = lapRecords.map(r => {
+        const isBL = r.time === bT;
+        const cB = (v, b) => (parseFloat(v) === b) ? `style="color:var(--hrc-red); font-weight:bold;"` : "";
+        return `<tr style="${isBL ? 'background:rgba(228,0,43,0.15);' : ''}">
+            <td>${r.no}</td><td ${cB(r.s1,b1)}>${r.s1}</td><td ${cB(r.s2,b2)}>${r.s2}</td><td ${cB(r.s3,b3)}>${r.s3}</td><td ${cB(r.s4,b4)}>${r.s4}</td>
+            <td style="${isBL ? 'color:var(--hrc-red);' : ''}">${timeFormat(r.time)}</td><td>${r.max}</td><td>${r.maxRpm}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('history-page').style.display = 'block';
+};
+
+// メインループ (タコメーター / 表示更新)
+// メインループ
 function mainLoop() {
     const now = Date.now();
     if (swState === 1) {
         document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
+        document.getElementById('display1').textContent = (isFrozen && now < freezeUntil) ? freezeDisplayTime : timeFormat(now - (lapStartTime || startTime));
+        
+        // 【仕様】フリーズ中は確定タイム、それ以外はリアルタイムを表示
         if (isFrozen && now < freezeUntil) {
             document.getElementById('display1').textContent = freezeDisplayTime;
+            document.getElementById('display1').style.color = "var(--hrc-red)"; // フリーズ中を視覚化
         } else {
             isFrozen = false;
             document.getElementById('display1').textContent = timeFormat(now - (lapStartTime || startTime));
+            document.getElementById('display1').style.color = "var(--hrc-white)";
         }
     }
+    
+    // タコメーター描画
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
     if (w > 0 && h > 0) {
         ctx.clearRect(0, 0, w, h);
@@ -263,6 +379,7 @@ function mainLoop() {
             if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = bY + Math.sin(ang) * rad; }
             else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - (sX + rad) - 40)); y = hY; ang = 1.5 * Math.PI; }
             if (i < segments) {
+                // 仕様: 青パワーバンド(8000~), 赤警告(12500~)
                 ctx.fillStyle = i < active ? (((i/segments)*14000) >= 12500 ? "var(--hrc-red)" : (((i/segments)*14000) >= 8000 ? "var(--hrc-blue)" : "#fff")) : "#222";
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2);
                 ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); ctx.restore();
@@ -274,57 +391,24 @@ function mainLoop() {
     requestAnimationFrame(mainLoop);
 }
 
-// --- 6. イベント登録 ---
+// イベント登録
 document.getElementById('intGpsBtn').onclick = toggleInternalGps;
 document.getElementById('btConnect').onclick = ble;
-// ★これを追加：HISTORYボタンを押した時にページを表示し、中身を更新する
-document.getElementById('historyBtn').onclick = () => {
-    updateHistoryTable(); // 履歴テーブルの中身を作成
-    document.getElementById('history-page').style.display = 'block';
-};
-
-// ★これも追加：履歴テーブルの中身を生成する関数
-function updateHistoryTable() {
-    const body = document.getElementById('history-body');
-    body.innerHTML = lapRecords.map(r => `
-        <tr>
-            <td>${r.no}</td>
-            <td>${r.s1}</td>
-            <td>${r.s2}</td>
-            <td>${r.s3}</td>
-            <td>${r.s4}</td>
-            <td style="font-weight:bold;">${timeFormat(r.time)}</td>
-            <td>${r.max}</td>
-            <td>${r.maxRpm}</td>
-        </tr>
-    `).join('');
-}
 document.getElementById('startBtn').onclick = function() {
     if (swState !== 1) {
-        // --- START (計測開始) ---
-        swState = 1; 
-        startTime = Date.now(); 
-        lapStartTime = 0; 
-        lapRecords = []; // 履歴をリセット
-        gpsPoints = [];  // 走行ログをリセット
-        lastPos = null; 
-        validDirection = null;
-        updateLapList(); // 画面上のリストを空にする
-
-        this.classList.add('active'); 
-        document.getElementById('gpxBtn').style.display = 'none';
+        swState = 1; startTime = Date.now(); lapStartTime = 0; lapRecords = []; gpsPoints = []; lastPos = null; validDirection = null;
+        this.classList.add('active'); document.getElementById('gpxBtn').style.display = 'none';
     } else {
-        // --- STOP (計測停止) ---
-        swState = 2; 
-        this.classList.remove('active'); 
-
-        // ログがある場合のみGPXボタンを表示
-        if (gpsPoints && gpsPoints.length > 0) {
-            document.getElementById('gpxBtn').style.display = 'block';
-        }
+        swState = 2; this.classList.remove('active'); document.getElementById('gpxBtn').style.display = 'block';
     }
 };
 document.getElementById('lapBtn').onclick = () => { if (swState === 1) processLap(Date.now(), false); else if (confirm("RESET?")) location.reload(); };
+
+// 【仕様】手動ラップボタンではフリーズさせない
+document.getElementById('lapBtn').onclick = () => { 
+    if (swState === 1) processLap(Date.now(), false); 
+    else if (confirm("RESET?")) location.reload(); 
+};
 
 window.onload = () => {
     ['startLine', 's1Line', 's2Line', 's3Line'].forEach(key => {
