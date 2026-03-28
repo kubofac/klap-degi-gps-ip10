@@ -324,17 +324,39 @@ function mainLoop() {
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
     if (w > 0 && h > 0) {
         ctx.clearRect(0, 0, w, h);
-        const segments = 75, active = Math.floor((currentRPM / 14000) * segments);
+        
+        const segments = 75;
+        const maxRpmScale = 14000; // フルスケールを14000に固定
+        const active = Math.floor((currentRPM / maxRpmScale) * segments);
+        
         const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
         for (let i = 0; i <= segments; i++) {
             let x, y, ang, prog;
             if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = bY + Math.sin(ang) * rad; }
             else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - (sX + rad) - 40)); y = hY; ang = 1.5 * Math.PI; }
+            
             if (i < segments) {
-                const rpm = (i / segments) * 14000;
-                ctx.fillStyle = i < active ? (rpm >= 12500 ? "var(--hrc-red)" : (rpm >= 8000 ? "var(--hrc-blue)" : "#fff")) : "#222";
-                ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2);
-                ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); ctx.restore();
+                // そのバーの位置が何回転に相当するか計算
+                const barRpm = (i / segments) * maxRpmScale;
+                
+                // 色の決定ロジック
+                if (i < active) {
+                    if (barRpm >= 10500) {
+                        ctx.fillStyle = "var(--hrc-red)";   // 10500以上：赤
+                    } else if (barRpm >= 6000) {
+                        ctx.fillStyle = "var(--hrc-blue)";  // 6000以上：青
+                    } else {
+                        ctx.fillStyle = "#ffffff";          // 6000未満：白
+                    }
+                } else {
+                    ctx.fillStyle = "#222";                 // 未到達：暗いグレー
+                }
+                
+                ctx.save(); 
+                ctx.translate(x, y); 
+                ctx.rotate(ang + Math.PI / 2);
+                ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); 
+                ctx.restore();
             }
         }
     }
