@@ -10,7 +10,7 @@
     #dashboard { position: relative; display: flex; flex-direction: column; height: 100dvh; width: 100vw; padding-top: env(safe-area-inset-top); }
     #canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: calc(100% - 60px) !important; z-index: 1; }
     #debug-overlay { position: absolute; left: 10px; bottom: 65px; font-family: monospace; font-size: 10px; color: rgba(255, 255, 255, 0.4); z-index: 100; pointer-events: none; }
-
+    
     .main-ui-container { position: absolute; right: 10px; top: 65px; bottom: 65px; display: flex; flex-direction: row; align-items: flex-start; gap: 20px; z-index: 20; pointer-events: none; }
     #info-overlay { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 5px; margin-top: 50px;}
     #rpm_val { font-size: 11vh; font-weight: 900; line-height: 0.8; text-shadow: 3px 3px 10px #000; }
@@ -18,13 +18,13 @@
     #sector-container { display: flex; justify-content: flex-end; gap: 10px; font-size: 4vh; font-weight: 900; height: 4.5vh; margin-top: 5px; }
     .sec-box { display: none; text-shadow: 2px 2px 8px #000; color: #fff; }
     #display { font-size: 2.5vh; opacity: 0.8; margin-top: 5px; }
-
+    
     .right-panels { display: flex; flex-direction: row; gap: 15px; height: 100%; align-items: flex-start; pointer-events: auto;}
     #lap-panel { width: 140px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
     #lap { flex: 1; overflow-y: auto; scrollbar-width: none; }
     .lap-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; font-weight: 900; }
     .best-lap { color: var(--hrc-red) !important; }
-
+    
     .data-panel { display: flex; flex-direction: column; gap: 10px; width: 95px; align-items: flex-end; }
     .data-box { display: flex; flex-direction: column; align-items: flex-end; width: 100%; }
     .label { font-size: 10px; color: var(--hrc-red); font-weight: bold; text-align: right; }
@@ -35,7 +35,7 @@
     #history-table th { color: var(--hrc-red); border-bottom: 2px solid var(--hrc-red); padding: 8px; }
     #history-table td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
     .close-btn { background: var(--hrc-red); color: white; padding: 15px; text-align: center; font-weight: bold; border-radius: 4px; cursor: pointer; }
-
+    
     footer { height: 55px; display: flex; gap: 2px; padding: 3px; background: #000; border-top: 1px solid #333; z-index: 1000; position: fixed; bottom: 0; left: 0; right: 0; padding-bottom: env(safe-area-inset-bottom); }
     button { flex: 1; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 8px; font-weight: bold; cursor: pointer; }
     button.active { background: var(--hrc-red) !important; border: 1px solid #fff; }
@@ -182,10 +182,6 @@ async function connectToBle(device) {
     const d = e.target.value; 
     const now = Date.now();
     lastDataTimestamp = now;
-  char.addEventListener('characteristicvaluechanged', (e) => {
-        const d = e.target.value; // DataViewオブジェクト
-        const now = Date.now();
-        lastDataTimestamp = now;
 
     // ESP32のパケット長（13バイト）と一致しているか確認
     if (d.byteLength >= 13) {
@@ -193,26 +189,16 @@ async function connectToBle(device) {
         // getInt32(バイト開始位置, LittleEndian=true)
         lat = d.getInt32(0, true) / 1000000; 
         lon = d.getInt32(4, true) / 1000000;
-        // ESP32から送られてくる13バイトのパケットを分解
-        if (d.byteLength >= 13) {
-            // 1. 緯度 (Int32 / 4バイト) -> 0〜3バイト目
-            lat = d.getInt32(0, true) / 1000000; 
 
         // 2. 速度 (Uint16 / 2バイト)
         currentSpeedKmh = d.getUint16(8, true);
-            // 2. 経度 (Int32 / 4バイト) -> 4〜7バイト目
-            lon = d.getInt32(4, true) / 1000000;
 
         // 3. 温度 (Uint8 / 1バイト)
         currentTemp = d.getUint8(10);
-            // 3. 速度 (Uint16 / 2バイト) -> 8〜9バイト目
-            currentSpeedKmh = d.getUint16(8, true);
 
         // 4. 回転数Hz (Uint16 / 2バイト)
         const hz = d.getUint16(11, true);
         currentRPM = (hz * 60) / pulsePerRev;
-            // 4. 温度 (Uint8 / 1バイト) -> 10バイト目
-            currentTemp = d.getUint8(10);
 
         // --- 画面表示の更新 ---
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
@@ -220,21 +206,11 @@ async function connectToBle(device) {
         document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
         document.getElementById('temp_val').textContent = currentTemp;
         document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
-            // 5. 回転数Hz (Uint16 / 2バイト) -> 11〜12バイト目
-            const hz = d.getUint16(11, true);
-            // HzをRPMに変換 (1回転1パルスなら hz * 60)
-            currentRPM = (hz * 60) / pulsePerRev;
 
         // 位置情報が有効ならロジックを走らせる
         if (lat !== 0 && lon !== 0) {
             handlePositionUpdate(lat, lon, now);
         }
-            // --- 画面表示を更新 ---
-            document.getElementById('debug_lat').textContent = lat.toFixed(6);
-            document.getElementById('debug_lon').textContent = lon.toFixed(6);
-            document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
-            document.getElementById('temp_val').textContent = currentTemp;
-            document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
 
         // デバッグ用パケット数カウント
         const pktSpan = document.getElementById('debug_pkt');
@@ -243,16 +219,6 @@ async function connectToBle(device) {
         console.warn("受信パケットのサイズが足りません:", d.byteLength);
     }
 });
-            // 位置が有効ならロジック実行
-            if (lat !== 0 && lon !== 0) {
-                handlePositionUpdate(lat, lon, now);
-            }
-
-            // パケット受信数のカウントアップ（デバッグ用）
-            const pktSpan = document.getElementById('debug_pkt');
-            if (pktSpan) pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
-        }
-      });
         await char.startNotifications();
     } catch (e) { btn.textContent = "RETRYING..."; setTimeout(() => connectToBle(device), 3000); }
 }
@@ -283,7 +249,7 @@ async function toggleInternalGps() {
         return; 
     }
     btn.classList.add('active'); btn.textContent = "WAIT GPS...";
-
+    
     watchId = navigator.geolocation.watchPosition(pos => {
         const now = Date.now();
         const lat_val = pos.coords.latitude;
