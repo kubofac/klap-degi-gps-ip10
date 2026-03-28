@@ -178,15 +178,47 @@ async function connectToBle(device) {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         btn.classList.add('active'); btn.style.background = "var(--hrc-blue)"; btn.textContent = "BLE FIXED";
-        char.addEventListener('characteristicvaluechanged', (e) => {
-            const d = e.target.value; const now = Date.now();
-            lastDataTimestamp = now;
-            if (d.byteLength >= 3) {
-                currentRPM = (d.getUint16(0, true) * 60) / pulsePerRev;
-                currentTemp = d.getUint8(2);
-                document.getElementById('temp_val').textContent = currentTemp;
-            }
-        });
+      char.addEventListener('characteristicvaluechanged', (e) => {
+    const d = e.target.value; 
+    const now = Date.now();
+    lastDataTimestamp = now;
+
+    // ESP32のパケット長（13バイト）と一致しているか確認
+    if (d.byteLength >= 13) {
+        // 1. 緯度・経度 (Int32 / 4バイトずつ)
+        // getInt32(バイト開始位置, LittleEndian=true)
+        lat = d.getInt32(0, true) / 1000000; 
+        lon = d.getInt32(4, true) / 1000000;
+
+        // 2. 速度 (Uint16 / 2バイト)
+        currentSpeedKmh = d.getUint16(8, true);
+
+        // 3. 温度 (Uint8 / 1バイト)
+        currentTemp = d.getUint8(10);
+
+        // 4. 回転数Hz (Uint16 / 2バイト)
+        const hz = d.getUint16(11, true);
+        currentRPM = (hz * 60) / pulsePerRev;
+
+        // --- 画面表示の更新 ---
+        document.getElementById('debug_lat').textContent = lat.toFixed(6);
+        document.getElementById('debug_lon').textContent = lon.toFixed(6);
+        document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
+        document.getElementById('temp_val').textContent = currentTemp;
+        document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
+
+        // 位置情報が有効ならロジックを走らせる
+        if (lat !== 0 && lon !== 0) {
+            handlePositionUpdate(lat, lon, now);
+        }
+
+        // デバッグ用パケット数カウント
+        const pktSpan = document.getElementById('debug_pkt');
+        if (pktSpan) pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
+    } else {
+        console.warn("受信パケットのサイズが足りません:", d.byteLength);
+    }
+});
         await char.startNotifications();
     } catch (e) { btn.textContent = "RETRYING..."; setTimeout(() => connectToBle(device), 3000); }
 }
