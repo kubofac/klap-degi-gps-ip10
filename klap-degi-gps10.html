@@ -358,11 +358,11 @@ function mainLoop() {
                 
                 // そのバーの「位置」で色を固定する
                 if (barRpmAtThisPoint >= 10500) {
-                    barColor = "var(--hrc-red)";    // 10500以上の区間は常に赤
+                    barColor = "#E4002B";    // 赤 (HRC Red)   
                 } else if (barRpmAtThisPoint >= 6000) {
-                    barColor = "var(--hrc-blue)";   // 6000〜10500の区間は常に青
+                   barColor = "#004098";    // 青 (HRC Blue)
                 } else {
-                    barColor = "#FFFFFF";           // それ以下は常に白
+                    barColor = "#FFFFFF";    // 白
                 }
             }
             
