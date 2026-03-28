@@ -352,16 +352,21 @@ function mainLoop() {
             }
             
             // バーの描画
+            // --- 修正後の色判定ロジック ---
+
             if (i < segments) {
                 let barColor = "#222"; // 未到達部分は暗いグレー
-                if (i < active) {
-                    const barRpm = (i / segments) * maxRpmScale;
-                    if (barRpm >= 10500) barColor = "var(--hrc-red)";    // 赤
-                    else if (barRpm >= 6000) barColor = "var(--hrc-blue)"; // 青
-                    else barColor = "#FFFFFF";                             // 白
-                }
-                
-                ctx.fillStyle = barColor;
+             if (i < active) {
+    // 「現在の回転数」に応じて、伸びているバー全体の色を決定する
+    if (currentRPM >= 10500) {
+        barColor = "var(--hrc-red)";    // 10500以上なら、伸びているバーはすべて赤
+    } else if (currentRPM >= 6000) {
+        barColor = "var(--hrc-blue)";   // 6000以上なら、伸びているバーはすべて青
+    } else {
+        barColor = "#FFFFFF";           // それ以下なら白
+    }
+}
+ctx.fillStyle = barColor;
                 ctx.save(); 
                 ctx.translate(x, y); 
                 ctx.rotate(ang + Math.PI / 2);
