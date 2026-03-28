@@ -318,45 +318,74 @@ function updateLapList() {
 
 function mainLoop() {
     const now = Date.now();
+    // タイマー・フリーズ処理
     if (swState === 1) {
         document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
         const d1 = document.getElementById('display1');
         if (isFrozen && now < freezeUntil) { d1.textContent = freezeDisplayTime; }
         else { isFrozen = false; d1.textContent = timeFormat(now - (lapStartTime || startTime)); }
     }
+
+    // キャンバス描画処理
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
     if (w > 0 && h > 0) {
         ctx.clearRect(0, 0, w, h);
         
         const segments = 75;
-        const maxRpmScale = 14000; // フルスケールを14000に固定
+        const maxRpmScale = 14000; 
         const active = Math.floor((currentRPM / maxRpmScale) * segments);
         
         const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
+        
         for (let i = 0; i <= segments; i++) {
             let x, y, ang, prog;
-            if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = bY + Math.sin(ang) * rad; }
-            else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - (sX + rad) - 40)); y = hY; ang = 1.5 * Math.PI; }
+            if (i <= curveEnd) { 
+                prog = i / curveEnd; 
+                ang = Math.PI + (prog * (Math.PI / 2)); 
+                x = sX + rad + Math.cos(ang) * rad; 
+                y = bY + Math.sin(ang) * rad; 
+            } else { 
+                prog = (i - curveEnd) / (segments - curveEnd); 
+                x = (sX + rad) + (prog * (w - (sX + rad) - 40)); 
+                y = hY; 
+                ang = 1.5 * Math.PI; 
+            }
             
+            // バーの描画
             if (i < segments) {
-                // そのバーの位置が何回転に相当するか計算
-                const barRpm = (i / segments) * maxRpmScale; // その地点が何回転相当か
-if (i < active) {
-    if (barRpm >= 10500) ctx.fillStyle = "var(--hrc-red)";   // 10500以上：赤
-    else if (barRpm >= 6000) ctx.fillStyle = "var(--hrc-blue)"; // 6000以上：青
-    else ctx.fillStyle = "#fff";                                // それ以外：白
-}
+                let barColor = "#222"; // 未到達部分は暗いグレー
+                if (i < active) {
+                    const barRpm = (i / segments) * maxRpmScale;
+                    if (barRpm >= 10500) barColor = "var(--hrc-red)";    // 赤
+                    else if (barRpm >= 6000) barColor = "var(--hrc-blue)"; // 青
+                    else barColor = "#FFFFFF";                             // 白
+                }
                 
+                ctx.fillStyle = barColor;
                 ctx.save(); 
                 ctx.translate(x, y); 
                 ctx.rotate(ang + Math.PI / 2);
                 ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); 
                 ctx.restore();
             }
+
+            // 目盛り数字（1, 2, 3...）の描画
+            if (i % 10 === 0 || i === segments) {
+                const labelRpm = (i / segments) * 14; // 14000を14として表示
+                ctx.save();
+                ctx.fillStyle = (i <= active) ? "#fff" : "#444";
+                ctx.font = `italic bold ${Math.max(12, Math.floor(h * 0.05))}px Arial`;
+                ctx.textAlign = "center";
+                ctx.fillText(Math.round(labelRpm), x + Math.cos(ang) * 38, y + Math.sin(ang) * 38);
+                ctx.restore();
+            }
         }
     }
+    
+    // 数値テキストの更新
     document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
     document.getElementById('max_speed_val').textContent = Math.round(maxSpeedInLap);
+    
     requestAnimationFrame(mainLoop);
 }
 
