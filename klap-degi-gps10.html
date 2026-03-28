@@ -315,31 +315,90 @@ function updateLapList() {
 
 function mainLoop() {
     const now = Date.now();
+
+    // --- タイマー・ディスプレイ処理 ---
     if (swState === 1) {
         document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
         const d1 = document.getElementById('display1');
-        if (isFrozen && now < freezeUntil) { d1.textContent = freezeDisplayTime; }
-        else { isFrozen = false; d1.textContent = timeFormat(now - (lapStartTime || startTime)); }
+        
+        // ラップ通過時の表示フリーズ処理
+        if (isFrozen && now < freezeUntil) { 
+            d1.textContent = freezeDisplayTime; 
+        } else { 
+            isFrozen = false; 
+            d1.textContent = timeFormat(now - (lapStartTime || startTime)); 
+        }
     }
-    const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
+
+    // --- キャンバス（タコメーター描画）準備 ---
+    const w = canvas.width = canvas.clientWidth;
+    const h = canvas.height = canvas.clientHeight;
+    
     if (w > 0 && h > 0) {
         ctx.clearRect(0, 0, w, h);
-        const segments = 75, active = Math.floor((currentRPM / 14000) * segments);
+
+        const segments = 75; // バーの総本数
+        const maxRpmScale = 14000; // タコメーターの右端
+        const active = Math.floor((currentRPM / maxRpmScale) * segments);
+
+        // 描画位置の基準設定
         const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
+
         for (let i = 0; i <= segments; i++) {
             let x, y, ang, prog;
-            if (i <= curveEnd) { prog = i / curveEnd; ang = Math.PI + (prog * (Math.PI / 2)); x = sX + rad + Math.cos(ang) * rad; y = bY + Math.sin(ang) * rad; }
-            else { prog = (i - curveEnd) / (segments - curveEnd); x = (sX + rad) + (prog * (w - (sX + rad) - 40)); y = hY; ang = 1.5 * Math.PI; }
+            
+            // カーブ部分と直線部分の座標計算
+            if (i <= curveEnd) { 
+                prog = i / curveEnd; 
+                ang = Math.PI + (prog * (Math.PI / 2)); 
+                x = sX + rad + Math.cos(ang) * rad; 
+                y = bY + Math.sin(ang) * rad; 
+            } else { 
+                prog = (i - curveEnd) / (segments - curveEnd); 
+                x = (sX + rad) + (prog * (w - (sX + rad) - 40)); 
+                y = hY; 
+                ang = 1.5 * Math.PI; 
+            }
+
             if (i < segments) {
-                const rpm = (i / segments) * 14000;
-                ctx.fillStyle = i < active ? (rpm >= 12500 ? "var(--hrc-red)" : (rpm >= 8000 ? "var(--hrc-blue)" : "#fff")) : "#222";
-                ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2);
-                ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); ctx.restore();
+                // --- 【色分けロジック】 ---
+                // 各バーが担当する回転数を計算
+                const barRpm = (i / segments) * maxRpmScale;
+                
+                if (i < active) {
+                    // 現在の回転数がこのバーまで到達している場合
+                    if (barRpm >= 10500) {
+                        ctx.fillStyle = "var(--hrc-red)";   // 10500以上：赤
+                    } else if (barRpm >= 6000) {
+                        ctx.fillStyle = "var(--hrc-blue)";  // 6000〜10500：青
+                    } else {
+                        ctx.fillStyle = "#ffffff";          // 6000未満：白
+                    }
+                } else {
+                    // 回転数が届いていないバー
+                    ctx.fillStyle = "#222222"; 
+                }
+
+                // バーの描画
+                ctx.save(); 
+                ctx.translate(x, y); 
+                ctx.rotate(ang + Math.PI / 2);
+                ctx.fillRect(
+                    -Math.max(4, w * 0.012) / 2, 
+                    -Math.max(25, h * 0.12) / 2, 
+                    Math.max(4, w * 0.012), 
+                    Math.max(25, h * 0.12)
+                ); 
+                ctx.restore();
             }
         }
     }
+
+    // --- 数値表示の更新 ---
     document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
     document.getElementById('max_speed_val').textContent = Math.round(maxSpeedInLap);
+    
+    // 次のフレームを要求
     requestAnimationFrame(mainLoop);
 }
 
