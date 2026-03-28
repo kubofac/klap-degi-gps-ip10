@@ -199,7 +199,10 @@ char.addEventListener('characteristicvaluechanged', (e) => {
 
         // 11-12バイト目: 回転数Hz (Uint16)
         const hz = d.getUint16(11, true);
-        currentRPM = (hz * 60) / (pulsePerRev || 1);
+// ストレージから読み込んだ pulsePerRev (初期値1) で割る
+// 1回転1パルス(pl1=1)なら hz * 60 / 1 = 正解
+// 1回転2パルス(pl1=2)なら hz * 60 / 2 = 正解
+currentRPM = (hz * 60) / (pulsePerRev || 1);
 
         // --- 画面表示の更新 ---
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
@@ -337,20 +340,12 @@ function mainLoop() {
             
             if (i < segments) {
                 // そのバーの位置が何回転に相当するか計算
-                const barRpm = (i / segments) * maxRpmScale;
-                
-                // 色の決定ロジック
-                if (i < active) {
-                    if (barRpm >= 10500) {
-                        ctx.fillStyle = "var(--hrc-red)";   // 10500以上：赤
-                    } else if (barRpm >= 6000) {
-                        ctx.fillStyle = "var(--hrc-blue)";  // 6000以上：青
-                    } else {
-                        ctx.fillStyle = "#ffffff";          // 6000未満：白
-                    }
-                } else {
-                    ctx.fillStyle = "#222";                 // 未到達：暗いグレー
-                }
+                const barRpm = (i / segments) * maxRpmScale; // その地点が何回転相当か
+if (i < active) {
+    if (barRpm >= 10500) ctx.fillStyle = "var(--hrc-red)";   // 10500以上：赤
+    else if (barRpm >= 6000) ctx.fillStyle = "var(--hrc-blue)"; // 6000以上：青
+    else ctx.fillStyle = "#fff";                                // それ以外：白
+}
                 
                 ctx.save(); 
                 ctx.translate(x, y); 
