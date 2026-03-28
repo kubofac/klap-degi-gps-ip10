@@ -178,27 +178,28 @@ async function connectToBle(device) {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         btn.classList.add('active'); btn.style.background = "var(--hrc-blue)"; btn.textContent = "BLE FIXED";
-      char.addEventListener('characteristicvaluechanged', (e) => {
+char.addEventListener('characteristicvaluechanged', (e) => {
     const d = e.target.value; 
     const now = Date.now();
     lastDataTimestamp = now;
 
-    // ESP32のパケット長（13バイト）と一致しているか確認
+    // ESP32のパケット長（13バイト）を正確に読み解く
     if (d.byteLength >= 13) {
-        // 1. 緯度・経度 (Int32 / 4バイトずつ)
-        // getInt32(バイト開始位置, LittleEndian=true)
+        // 0-3バイト目: 緯度 (Int32, 10^6倍された整数)
         lat = d.getInt32(0, true) / 1000000; 
+        
+        // 4-7バイト目: 経度 (Int32, 10^6倍された整数)
         lon = d.getInt32(4, true) / 1000000;
 
-        // 2. 速度 (Uint16 / 2バイト)
+        // 8-9バイト目: 速度 (Uint16, km/h)
         currentSpeedKmh = d.getUint16(8, true);
 
-        // 3. 温度 (Uint8 / 1バイト)
+        // 10バイト目: 温度 (Uint8)
         currentTemp = d.getUint8(10);
 
-        // 4. 回転数Hz (Uint16 / 2バイト)
+        // 11-12バイト目: 回転数Hz (Uint16)
         const hz = d.getUint16(11, true);
-        currentRPM = (hz * 60) / pulsePerRev;
+        currentRPM = (hz * 60) / (pulsePerRev || 1);
 
         // --- 画面表示の更新 ---
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
@@ -215,8 +216,6 @@ async function connectToBle(device) {
         // デバッグ用パケット数カウント
         const pktSpan = document.getElementById('debug_pkt');
         if (pktSpan) pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
-    } else {
-        console.warn("受信パケットのサイズが足りません:", d.byteLength);
     }
 });
         await char.startNotifications();
