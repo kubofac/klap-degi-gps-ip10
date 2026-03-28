@@ -45,7 +45,6 @@
 
 <div id="dashboard">
     <canvas id="canvas"></canvas>
-    <div id="debug-overlay">LAT:<span id="debug_lat">0.000</span> LON:<span id="debug_lon">0.000</span> ACC:<span id="debug_acc">0</span></div>
    <div id="debug-overlay">LAT:<span id="debug_lat">0.000</span> LON:<span id="debug_lon">0.000</span> ACC:<span id="debug_acc">0</span> PKT:<span id="debug_pkt">0</span></div>
     <div class="main-ui-container">
         <div id="info-overlay">
@@ -183,6 +182,10 @@ async function connectToBle(device) {
     const d = e.target.value; 
     const now = Date.now();
     lastDataTimestamp = now;
+  char.addEventListener('characteristicvaluechanged', (e) => {
+        const d = e.target.value; // DataViewオブジェクト
+        const now = Date.now();
+        lastDataTimestamp = now;
 
     // ESP32のパケット長（13バイト）と一致しているか確認
     if (d.byteLength >= 13) {
@@ -190,16 +193,26 @@ async function connectToBle(device) {
         // getInt32(バイト開始位置, LittleEndian=true)
         lat = d.getInt32(0, true) / 1000000; 
         lon = d.getInt32(4, true) / 1000000;
+        // ESP32から送られてくる13バイトのパケットを分解
+        if (d.byteLength >= 13) {
+            // 1. 緯度 (Int32 / 4バイト) -> 0〜3バイト目
+            lat = d.getInt32(0, true) / 1000000; 
 
         // 2. 速度 (Uint16 / 2バイト)
         currentSpeedKmh = d.getUint16(8, true);
+            // 2. 経度 (Int32 / 4バイト) -> 4〜7バイト目
+            lon = d.getInt32(4, true) / 1000000;
 
         // 3. 温度 (Uint8 / 1バイト)
         currentTemp = d.getUint8(10);
+            // 3. 速度 (Uint16 / 2バイト) -> 8〜9バイト目
+            currentSpeedKmh = d.getUint16(8, true);
 
         // 4. 回転数Hz (Uint16 / 2バイト)
         const hz = d.getUint16(11, true);
         currentRPM = (hz * 60) / pulsePerRev;
+            // 4. 温度 (Uint8 / 1バイト) -> 10バイト目
+            currentTemp = d.getUint8(10);
 
         // --- 画面表示の更新 ---
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
@@ -207,11 +220,21 @@ async function connectToBle(device) {
         document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
         document.getElementById('temp_val').textContent = currentTemp;
         document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
+            // 5. 回転数Hz (Uint16 / 2バイト) -> 11〜12バイト目
+            const hz = d.getUint16(11, true);
+            // HzをRPMに変換 (1回転1パルスなら hz * 60)
+            currentRPM = (hz * 60) / pulsePerRev;
 
         // 位置情報が有効ならロジックを走らせる
         if (lat !== 0 && lon !== 0) {
             handlePositionUpdate(lat, lon, now);
         }
+            // --- 画面表示を更新 ---
+            document.getElementById('debug_lat').textContent = lat.toFixed(6);
+            document.getElementById('debug_lon').textContent = lon.toFixed(6);
+            document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
+            document.getElementById('temp_val').textContent = currentTemp;
+            document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
 
         // デバッグ用パケット数カウント
         const pktSpan = document.getElementById('debug_pkt');
@@ -220,6 +243,16 @@ async function connectToBle(device) {
         console.warn("受信パケットのサイズが足りません:", d.byteLength);
     }
 });
+            // 位置が有効ならロジック実行
+            if (lat !== 0 && lon !== 0) {
+                handlePositionUpdate(lat, lon, now);
+            }
+
+            // パケット受信数のカウントアップ（デバッグ用）
+            const pktSpan = document.getElementById('debug_pkt');
+            if (pktSpan) pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
+        }
+      });
         await char.startNotifications();
     } catch (e) { btn.textContent = "RETRYING..."; setTimeout(() => connectToBle(device), 3000); }
 }
