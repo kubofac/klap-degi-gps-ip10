@@ -271,13 +271,48 @@ async function toggleInternalGps() {
 }
 
 // GPX
+// GPX出力ボタンのクリック処理 (修正版)
 document.getElementById('gpxBtn').onclick = () => {
     if (gpsPoints.length === 0) return;
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n <trk><name>Log_${new Date().toLocaleString()}</name><trkseg>`;
+
+    // --- 解析アプリ用のライン座標取得ロジックを追加 ---
+    const getL = (k) => {
+        const p1Lat = localStorage.getItem(k + 'P1Lat');
+        const p1Lon = localStorage.getItem(k + 'P1Lon');
+        const p2Lat = localStorage.getItem(k + 'P2Lat');
+        const p2Lon = localStorage.getItem(k + 'P2Lon');
+        // 座標が1つでも欠けていれば空文字、揃っていればカンマ区切りで返す
+        return p1Lat ? `${p1Lat},${p1Lon},${p2Lat},${p2Lon}` : "";
+    };
+
+    // 各ラインをパイプ「|」で連結した文字列を作成
+    const lineData = `SL:${getL('startLine')}|S1:${getL('s1Line')}|S2:${getL('s2Line')}|S3:${getL('s3Line')}`;
+
+    // --- GPX文字列の組み立て ---
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    gpx += `<gpx version="1.1" creator="KLAP_DEGI" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+    
+    // 解析アプリがここを読み取って地図に線を引きます
+    gpx += `  <metadata>\n    <desc>LINE_DATA[${lineData}]</desc>\n  </metadata>\n`;
+    
+    gpx += `  <trk>\n    <name>Log_${new Date().toLocaleString()}</name>\n    <trkseg>`;
+
     gpsPoints.forEach(p => {
-        gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.time).toISOString()}</time><extensions><rpm>${Math.round(p.rpm)}</rpm><speed>${Math.round(p.speed)}</speed><temp>${p.temp}</temp></extensions></trkpt>`;
+        // 時刻をISO形式に変換
+        const timeISO = new Date(p.time).toISOString();
+        gpx += `\n      <trkpt lat="${p.lat}" lon="${p.lon}">`;
+        gpx += `<time>${timeISO}</time>`;
+        gpx += `<extensions>`;
+        gpx += `<rpm>${Math.round(p.rpm)}</rpm>`;
+        gpx += `<speed>${Math.round(p.speed)}</speed>`;
+        gpx += `<temp>${p.temp}</temp>`;
+        gpx += `</extensions>`;
+        gpx += `</trkpt>`;
     });
-    gpx += `\n  </trkseg></trk>\n</gpx>`;
+
+    gpx += `\n    </trkseg>\n  </trk>\n</gpx>`;
+
+    // コピー用のオーバーレイを表示
     showCopyOverlay(gpx);
 };
 
