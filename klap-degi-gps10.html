@@ -297,18 +297,25 @@ document.getElementById('gpxBtn').onclick = () => {
     
     gpx += `  <trk>\n    <name>Log_${new Date().toLocaleString()}</name>\n    <trkseg>`;
 
-    gpsPoints.forEach(p => {
-        // 時刻をISO形式に変換
-        const timeISO = new Date(p.time).toISOString();
-        gpx += `\n      <trkpt lat="${p.lat}" lon="${p.lon}">`;
-        gpx += `<time>${timeISO}</time>`;
-        gpx += `<extensions>`;
-        gpx += `<rpm>${Math.round(p.rpm)}</rpm>`;
-        gpx += `<speed>${Math.round(p.speed)}</speed>`;
-        gpx += `<temp>${p.temp}</temp>`;
-        gpx += `</extensions>`;
-        gpx += `</trkpt>`;
-    });
+  gpsPoints.forEach(p => {
+    const timeISO = new Date(p.time).toISOString();
+    // 1. 速度を km/h から m/s に変換 (解析アプリの標準仕様)
+    const speedMS = (p.speed / 3.6).toFixed(2); 
+
+    gpx += `\n      <trkpt lat="${p.lat}" lon="${p.lon}">`;
+    gpx += `<time>${timeISO}</time>`;
+    // 2. 標準の <speed> タグを追加 (m/s)
+    gpx += `<speed>${speedMS}</speed>`; 
+    gpx += `<extensions>`;
+    // 3. 解析アプリが直接参照するカスタムタグ
+    gpx += `<rpm>${Math.round(p.rpm)}</rpm>`;
+    gpx += `<speed>${speedMS}</speed>`; // extensions内もm/s
+    gpx += `<temp>${p.temp}</temp>`;
+    // 互換性のためのgpxtpx形式 (心拍数としてRPMを入れる)
+    gpx += `<gpxtpx:TrackPointExtension><gpxtpx:hr>${Math.round(p.rpm)}</gpxtpx:hr></gpxtpx:TrackPointExtension>`;
+    gpx += `</extensions>`;
+    gpx += `</trkpt>`;
+});
 
     gpx += `\n    </trkseg>\n  </trk>\n</gpx>`;
 
