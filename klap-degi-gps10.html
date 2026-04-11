@@ -467,6 +467,16 @@ window.onload = () => {
     cooldownMs = parseInt(localStorage.getItem('lapCoolDownTime')) || 15000;
     mainLoop();
 };
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      // service-worker.js のパスが正しいか確認してください
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => console.log('SW Registered!', reg))
+        .catch(err => console.log('SW Register Failed!', err));
+    });
+  }
+
+    
 </script>
 </body>
 </html>
