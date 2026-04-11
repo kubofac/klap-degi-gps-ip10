@@ -102,17 +102,26 @@ let pulsePerRev = 1, cooldownMs = 15000, bleDevice = null;
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 
 function handlePositionUpdate(currLat, currLon, now) {
+    // 座標が0（GPS未測位）の場合は、以降の計算（ラップ判定など）をスキップ
     if (currLat === 0 && currLon === 0) return;
-    document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
 
+    // タイマー動作中（TIMERボタン押下後）のみ実行される処理
     if (swState === 1) {
         if (currentSpeedKmh > maxSpeedInLap) maxSpeedInLap = currentSpeedKmh;
         if (currentRPM > maxRpmInLap) maxRpmInLap = currentRPM;
 
-        const cur = { lat: currLat, lon: currLon, time: now, rpm: currentRPM, speed: currentSpeedKmh, temp: currentTemp };
+        const cur = { 
+            lat: currLat, 
+            lon: currLon, 
+            time: now, 
+            rpm: currentRPM, 
+            speed: currentSpeedKmh, 
+            temp: currentTemp 
+        };
         gpsPoints.push(cur);
 
         if (lastPos) {
+            // スタートライン通過判定
             const hitSL = getIntersection(lastPos, cur, lines.startLine);
             if (hitSL) {
                 if (validDirection === null) validDirection = hitSL.dir;
@@ -120,15 +129,29 @@ function handlePositionUpdate(currLat, currLon, now) {
                     processLap(hitSL.time, true); 
                 }
             }
+
+            // セクター（S1, S2, S3）通過判定
             ['s1', 's2', 's3'].forEach(s => {
                 const hit = getIntersection(lastPos, cur, lines[s + 'Line']);
                 if (hit) {
                     if (sectorDirections[s] === null) sectorDirections[s] = hit.dir;
                     if (hit.dir === sectorDirections[s]) {
                         const absT = (hit.time - lapStartTime) / 1000;
-                        if (s === 's1' && s1_abs === 0) { s1_abs = absT; lastPassedSectorTime = absT; document.getElementById('s1_val').textContent = s1_abs.toFixed(3); }
-                        else if (s === 's2' && s2_abs === 0) { s2_abs = absT; lastPassedSectorTime = absT; document.getElementById('s2_val').textContent = (s1_abs > 0 ? (s2_abs-s1_abs) : s2_abs).toFixed(3); }
-                        else if (s === 's3' && s3_abs === 0) { s3_abs = absT; lastPassedSectorTime = absT; document.getElementById('s3_val').textContent = (s2_abs > 0 ? (s3_abs-s2_abs) : (s1_abs > 0 ? s3_abs-s1_abs : s3_abs)).toFixed(3); }
+                        if (s === 's1' && s1_abs === 0) { 
+                            s1_abs = absT; 
+                            lastPassedSectorTime = absT; 
+                            document.getElementById('s1_val').textContent = s1_abs.toFixed(3); 
+                        }
+                        else if (s === 's2' && s2_abs === 0) { 
+                            s2_abs = absT; 
+                            lastPassedSectorTime = absT; 
+                            document.getElementById('s2_val').textContent = (s1_abs > 0 ? (s2_abs-s1_abs) : s2_abs).toFixed(3); 
+                        }
+                        else if (s === 's3' && s3_abs === 0) { 
+                            s3_abs = absT; 
+                            lastPassedSectorTime = absT; 
+                            document.getElementById('s3_val').textContent = (s2_abs > 0 ? (s3_abs-s2_abs) : (s1_abs > 0 ? s3_abs-s1_abs : s3_abs)).toFixed(3); 
+                        }
                     }
                 }
             });
@@ -178,6 +201,7 @@ async function connectToBle(device) {
         const service = await server.getPrimaryService(SERVICE_UUID);
         const char = await service.getCharacteristic(PULSE_UUID);
         btn.classList.add('active'); btn.style.background = "var(--hrc-blue)"; btn.textContent = "BLE FIXED";
+// BLE受信イベント：characteristicvaluechanged の中身
 char.addEventListener('characteristicvaluechanged', (e) => {
     const d = e.target.value; 
     const now = Date.now();
@@ -193,8 +217,8 @@ char.addEventListener('characteristicvaluechanged', (e) => {
         const hz = d.getUint16(11, true);
         currentRPM = (hz * 60) / (pulsePerRev || 1);
 
-        // --- 2. 【重要】ここが修正のキモ：常に画面を更新する ---
-        // handlePositionUpdateの条件(swState)に関わらず、届いた瞬間に数値を表示します
+        // --- 2. 画面表示の更新（ここを関数の外に出しました） ---
+        // これにより、座標が0であっても、タイマー停止中でも、常に画面が動きます
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
         document.getElementById('debug_lon').textContent = lon.toFixed(6);
         document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
@@ -202,12 +226,10 @@ char.addEventListener('characteristicvaluechanged', (e) => {
         document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
 
         // --- 3. ロジック処理の呼び出し ---
-        // 位置情報があれば、ラップ判定やログ保存の関数へ渡す
-        if (lat !== 0 && lon !== 0) {
-            handlePositionUpdate(lat, lon, now);
-        }
+        // 座標が有効な場合のみ、ラップ判定などの計算を行います
+        handlePositionUpdate(lat, lon, now);
 
-        // デバッグ用パケットカウンター（通信が生きているか確認用）
+        // デバッグ用パケットカウンター
         const pktSpan = document.getElementById('debug_pkt');
         if (pktSpan) {
             pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
