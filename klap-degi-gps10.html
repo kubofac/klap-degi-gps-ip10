@@ -183,42 +183,35 @@ char.addEventListener('characteristicvaluechanged', (e) => {
     const now = Date.now();
     lastDataTimestamp = now;
 
-    // ESP32のパケット長（13バイト）を正確に読み解く
+    // ESP32のパケット長（13バイト）を確認
     if (d.byteLength >= 13) {
-        // 0-3バイト目: 緯度 (Int32, 10^6倍された整数)
+        // --- 1. データの抽出 ---
         lat = d.getInt32(0, true) / 1000000; 
-        
-        // 4-7バイト目: 経度 (Int32, 10^6倍された整数)
         lon = d.getInt32(4, true) / 1000000;
-
-        // 8-9バイト目: 速度 (Uint16, km/h)
         currentSpeedKmh = d.getUint16(8, true);
-
-        // 10バイト目: 温度 (Uint8)
         currentTemp = d.getUint8(10);
-
-        // 11-12バイト目: 回転数Hz (Uint16)
         const hz = d.getUint16(11, true);
-// ストレージから読み込んだ pulsePerRev (初期値1) で割る
-// 1回転1パルス(pl1=1)なら hz * 60 / 1 = 正解
-// 1回転2パルス(pl1=2)なら hz * 60 / 2 = 正解
-currentRPM = (hz * 60) / (pulsePerRev || 1);
+        currentRPM = (hz * 60) / (pulsePerRev || 1);
 
-        // --- 画面表示の更新 ---
+        // --- 2. 【重要】ここが修正のキモ：常に画面を更新する ---
+        // handlePositionUpdateの条件(swState)に関わらず、届いた瞬間に数値を表示します
         document.getElementById('debug_lat').textContent = lat.toFixed(6);
         document.getElementById('debug_lon').textContent = lon.toFixed(6);
         document.getElementById('speed_val').textContent = Math.round(currentSpeedKmh);
         document.getElementById('temp_val').textContent = currentTemp;
         document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
 
-        // 位置情報が有効ならロジックを走らせる
+        // --- 3. ロジック処理の呼び出し ---
+        // 位置情報があれば、ラップ判定やログ保存の関数へ渡す
         if (lat !== 0 && lon !== 0) {
             handlePositionUpdate(lat, lon, now);
         }
 
-        // デバッグ用パケット数カウント
+        // デバッグ用パケットカウンター（通信が生きているか確認用）
         const pktSpan = document.getElementById('debug_pkt');
-        if (pktSpan) pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
+        if (pktSpan) {
+            pktSpan.textContent = parseInt(pktSpan.textContent || 0) + 1;
+        }
     }
 });
         await char.startNotifications();
