@@ -94,7 +94,7 @@ let lat = 0, lon = 0, currentRPM = 0, currentTemp = 0, currentSpeedKmh = 0, maxS
 let lastPos = null, isFrozen = false, freezeDisplayTime = "", freezeUntil = 0;
 let sectorClearTimer = null, lastDataTimestamp = 0, watchdogTimer = null;
 const FREEZE_MS = 15000, SECTOR_CLEAR_MS = 3000;
-
+let displayedRPM = 0;
 let lines = { startLine: null, s1Line: null, s2Line: null, s3Line: null };
 let validDirection = null, sectorDirections = { s1: null, s2: null, s3: null };
 let s1_abs = 0, s2_abs = 0, s3_abs = 0, lastPassedSectorTime = 0, watchId = null;
@@ -375,25 +375,37 @@ function updateLapList() {
 
 function mainLoop() {
     const now = Date.now();
-    // --- タイマー処理（変更なし） ---
+
+    // 1. タイマー表示処理
     if (swState === 1) {
         document.getElementById('display').textContent = "TOTAL " + timeFormat(now - startTime);
         const d1 = document.getElementById('display1');
-        if (isFrozen && now < freezeUntil) { d1.textContent = freezeDisplayTime; }
-        else { isFrozen = false; d1.textContent = timeFormat(now - (lapStartTime || startTime)); }
+        if (isFrozen && now < freezeUntil) { 
+            d1.textContent = freezeDisplayTime; 
+        } else { 
+            isFrozen = false; 
+            d1.textContent = timeFormat(now - (lapStartTime || startTime)); 
+        }
     }
 
+    // 2. キャンバスの準備
     const w = canvas.width = canvas.clientWidth, h = canvas.height = canvas.clientHeight;
     if (w > 0 && h > 0) {
         ctx.clearRect(0, 0, w, h);
         
+        // --- 【追加修正】RPMの動きを滑らかにする補間計算 ---
+        // 0.15は追従性です。お好みに合わせて0.1(超滑らか)〜0.3(機敏)の間で調整してください
+        if (typeof displayedRPM === 'undefined') window.displayedRPM = 0; 
+        displayedRPM += (currentRPM - displayedRPM) * 0.15;
+        
         const segments = 75;
         const maxRpmScale = 14000; 
-        // 14000を超えてもsegments(75)で止める（バーが消えない対策）
-        const active = Math.min(segments, Math.floor((currentRPM / maxRpmScale) * segments));
+        // 描画には補間後の displayedRPM を使用
+        const active = Math.min(segments, Math.floor((displayedRPM / maxRpmScale) * segments));
         
         const sX = 25, hY = 40, bY = h - 10, rad = bY - hY, curveEnd = 30;
         
+        // 3. タコメーター（線画）の描画
         for (let i = 0; i < segments; i++) {
             let x, y, ang, prog;
             if (i <= curveEnd) { 
@@ -408,18 +420,16 @@ function mainLoop() {
                 ang = 1.5 * Math.PI; 
             }
             
-            // --- 固定グラデーションのロジック ---
-            let barColor = "#222"; // 未到達
+            // 固定グラデーション判定
+            let barColor = "#222"; // 未到達（背景色）
             if (i < active) {
                 const barRpmAtThisPoint = (i / segments) * maxRpmScale;
-                
-                // そのバーの「位置」で色を固定する
                 if (barRpmAtThisPoint >= 10500) {
-                    barColor = "#E4002B";    // 赤 (HRC Red)   
+                    barColor = "#E4002B"; // HRC Red
                 } else if (barRpmAtThisPoint >= 6000) {
-                   barColor = "#004098";    // 青 (HRC Blue)
+                    barColor = "#004098"; // HRC Blue
                 } else {
-                    barColor = "#FFFFFF";    // 白
+                    barColor = "#FFFFFF"; // White
                 }
             }
             
@@ -430,10 +440,11 @@ function mainLoop() {
             ctx.fillRect(-Math.max(4, w*0.012)/2, -Math.max(25, h*0.12)/2, Math.max(4, w*0.012), Math.max(25, h*0.12)); 
             ctx.restore();
 
-            // 目盛り数字
+            // 目盛り数字の描画
             if (i % 10 === 0 || i === segments - 1) {
                 const labelRpm = (i / segments) * 14;
                 ctx.save();
+                // バーが到達している、かつ回転数が0より大きい時だけ数字を白く光らせる
                 ctx.fillStyle = (i <= active && currentRPM > 0) ? "#fff" : "#444";
                 ctx.font = `italic bold ${Math.max(12, Math.floor(h * 0.05))}px Arial`;
                 ctx.textAlign = "center";
@@ -443,8 +454,10 @@ function mainLoop() {
         }
     }
     
+    // 4. 数値テキストの更新（ここは瞬時値を出したいので currentRPM を使用）
     document.getElementById('rpm_val').textContent = Math.floor(currentRPM);
     document.getElementById('max_speed_val').textContent = Math.round(maxSpeedInLap);
+    
     requestAnimationFrame(mainLoop);
 }
 
